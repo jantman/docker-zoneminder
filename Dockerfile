@@ -58,13 +58,6 @@ RUN chmod +x /sbin/pre-conf ; sync \
 COPY backup.sh /sbin/backup
 RUN chmod +x /sbin/backup
 
-RUN cd /usr/src \
-    && wget http://www.andywilcock.com/code/cambozola/cambozola-latest.tar.gz \
-    && tar -xzvf /usr/src/cambozola-latest.tar.gz \
-    && mv cambozola-0.936/dist/cambozola.jar /usr/share/zoneminder/www  \
-    && rm /usr/src/cambozola-latest.tar.gz \
-    && rm -R /usr/src/cambozola-0.936
-
 # add stuff or zmeventnotification.pl
 RUN cd /usr/bin/ \
     && wget https://raw.githubusercontent.com/pliablepixels/zmeventserver/master/zmeventnotification.pl \
