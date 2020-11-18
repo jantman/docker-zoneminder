@@ -5,21 +5,23 @@ SQLDUMP=zm.sql
 CONFDIR=/mnt/backup/rsnapshot/telescreen/daily.0/rsnapshot/etc/zm
 VOLUMEDIR=/opt/zm-test
 
-if [ "$EUID" -ne 0 ]
-  then echo "Please run as root or via sudo"
-  exit 1
-fi
+cd "$( dirname "${BASH_SOURCE[0]}" )"
 
 if [[ ! -e zm.sql ]]; then
   echo "Please retrieve zm.sql"
   exit 1
 fi
 
-if [[ -e events.tar.gz ]]; then
-  echo "Using existing events.tar.gz"
-  TARFILE=$(readlink -f events.tar.gz)
+if [[ -e zm-events.tar.bz2 ]]; then
+  echo "Using existing zm-events.tar.bz2"
+  TARFILE=$(readlink -f zm-events.tar.bz2)
 else
-  echo "Please create events.tar.gz from backup, via something like: for i in $(ls -1 /var/cache/zoneminder/events/ | grep -E '^[0-9]+$'); do find /var/cache/zoneminder/events/${i}/$(date +%Y-%m-%d) -type d | sort | tail -1; done | xargs -0 tar -cjvf /tmp/zm-events.tar.bz2"
+  echo "Please create zm-events.tar.bz2 from backup, via something like: for i in $(ls -1 /var/cache/zoneminder/events/ | grep -E '^[0-9]+$'); do find /var/cache/zoneminder/events/${i}/$(date +%Y-%m-%d) -type d | sort | tail -1; done | xargs -0 tar -cjvf /tmp/zm-events.tar.bz2"
+  exit 1
+fi
+
+if [ "$EUID" -ne 0 ]
+  then echo "Please run as root or via sudo"
   exit 1
 fi
 
@@ -47,6 +49,6 @@ else
   echo "Create events directory"
   mkdir -p ${VOLUMEDIR}/cache/{events,images,temp,cache}
   pushd ${VOLUMEDIR}/cache/events
-  tar -xjvf $TARFILE
+  tar -xjvf $TARFILE --strip-components=4
   popd
 fi
