@@ -52,3 +52,21 @@ else
   tar -xjvf $TARFILE --strip-components=4
   popd
 fi
+
+# GRANT ALL PRIVILEGES ON zm.* TO 'zm'@'%' IDENTIFIED BY 'zm';
+docker run -d \
+  --shm-size=4096m \
+  -e TZ=America/New_York \
+  -e ZM_DB_HOST=172.17.0.1 \
+  -e MYSQL_USER=zmuser \
+  -e MYSQL_PASSWORD=zmpass \
+  -e MYSQL_DATABASE=zm \
+  --name zm \
+  -p 8080:80 \
+  -p 9000:9000 \
+  -v /tmp/zm/backups:/var/backups \
+  -v /tmp/zm/cache:/var/cache/zoneminder \
+  -v /tmp/zm/config:/config \
+  jantman/docker-zoneminder:1.32
+
+# volumes: /var/backups /var/cache/zoneminder /config
