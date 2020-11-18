@@ -19,7 +19,7 @@ sed  -i "s|ZM_DB_HOST=localhost|ZM_DB_HOST=$ZM_DB_HOST|" /etc/zm/zm.conf
 MYSQL_USER=${MYSQL_USER:-zmuser}
 sed -i "s|ZM_DB_USER=zmuser|ZM_DB_USER=$MYSQL_USER|" /etc/zm/zm.conf
 MYSQL_PASSWORD=${MYSQL_PASSWORD:-zmpass}
-sed -i "s|ZM_DB_PASS=zm|ZM_DB_PASS=$MYSQL_PASSWORD|" /etc/zm/zm.conf
+sed -i "s|ZM_DB_PASS=zmpass|ZM_DB_PASS=$MYSQL_PASSWORD|" /etc/zm/zm.conf
 MYSQL_DATABASE=${MYSQL_DATABASE:-zm}
 sed -i "s|ZM_DB_NAME=zm|ZM_DB_NAME=$MYSQL_DATABASE|" /etc/zm/zm.conf
 #if MYSQL_ROOT_PASSWORD variable is provided in container use it as is, if not left as mysqlpsswd
