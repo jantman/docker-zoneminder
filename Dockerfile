@@ -39,11 +39,6 @@ RUN mkdir -p /var/log/zm ; sync
 COPY zm.sh /sbin/zm.sh
 RUN chmod +x /sbin/zm.sh
 
-# add zmeventnotification to runit
-RUN mkdir -p /etc/service/zmeventnotification ; sync
-COPY zmeventnotification.sh /etc/service/zmeventnotification/run
-RUN chmod +x /etc/service/zmeventnotification/run
-
 ##startup scripts
 #Pre-config scrip that maybe need to be run one time only when the container run the first time .. using a flag to don't
 #run it again ... use for conf for service ... when run the first time ...
