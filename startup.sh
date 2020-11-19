@@ -39,12 +39,16 @@ if [ ! -d /etc/zm ]; then
    mkdir -p /etc/zm/
 fi
 if [ -f /config/zmeventnotification.ini ]; then
-   echo "Moving zmeventnotification.ini"
+   echo "Linking zmeventnotification.ini"
    ln -sf /config/zmeventnotification.ini /etc/zm/zmeventnotification.ini
 fi
 if [ -f /config/zmeventnotification_secrets.ini ]; then
-   echo "Moving zmeventnotification_secrets.ini"
+   echo "Linking zmeventnotification_secrets.ini"
    ln -sf /config/zmeventnotification_secrets.ini /etc/zm/zmeventnotification_secrets.ini
+fi
+if [ -f /config/zoneminder.conf ]; then
+   echo "Linking zoneminder.conf"
+   ln -sf /config/zoneminder.conf /etc/apache2/conf-available/zoneminder.conf
 fi
 
 if [ -f /var/cache/zoneminder/configured ]; then
