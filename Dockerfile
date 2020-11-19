@@ -32,7 +32,8 @@ RUN mkdir -p /etc/service/apache2  /var/log/apache2 ; sync
 COPY apache2.sh /etc/service/apache2/run
 RUN chmod +x /etc/service/apache2/run \
     && cp /var/log/cron/config /var/log/apache2/ \
-    && chown -R www-data /var/log/apache2
+    && chown -R www-data /var/log/apache2 \
+    && ln -s /etc/apache2/mods-available/headers.load /etc/apache2/mods-enabled/
 
 # to add zm deamon to runit
 RUN mkdir -p /var/log/zm ; sync
