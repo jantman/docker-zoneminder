@@ -35,12 +35,16 @@ mysql_ready() {
 }
 
 # Handle the zmeventnotification.ini file
+if [ ! -d /etc/zm ]; then
+   mkdir -p /etc/zm/
+fi
 if [ -f /config/zmeventnotification.ini ]; then
    echo "Moving zmeventnotification.ini"
-   if [ ! -d /var/cache/zoneminder/events ]; then
-      mkdir -p /etc/zm/
-   fi
    ln -sf /config/zmeventnotification.ini /etc/zm/zmeventnotification.ini
+fi
+if [ -f /config/zmeventnotification_secrets.ini ]; then
+   echo "Moving zmeventnotification_secrets.ini"
+   ln -sf /config/zmeventnotification_secrets.ini /etc/zm/zmeventnotification_secrets.ini
 fi
 
 if [ -f /var/cache/zoneminder/configured ]; then

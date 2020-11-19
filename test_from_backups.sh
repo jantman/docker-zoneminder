@@ -53,6 +53,9 @@ else
   popd
 fi
 
+sed 's|secrets = /opt/home-automation-configs/zoneminder/zmeventnotification_secrets.ini|secrets = /etc/zm/zmeventnotification_secrets.ini|' /home/jantman/GIT/home-automation-configs/zoneminder/zmeventnotification.ini > ${VOLUMEDIR}/etc/zmeventnotification.ini
+cp /home/jantman/GIT/home-automation-configs/zoneminder/zmeventnotification_secrets.ini ${VOLUMEDIR}/etc/zmeventnotification_secrets.ini
+
 touch ${VOLUMEDIR}/cache/configured
 
 # GRANT ALL PRIVILEGES ON zm.* TO 'zm'@'%' IDENTIFIED BY 'zm';
