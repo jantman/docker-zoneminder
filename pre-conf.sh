@@ -6,6 +6,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -q php-gd zoneminder
 #to fix error relate to ip address of container apache2
 echo "ServerName localhost" | tee /etc/apache2/conf-available/fqdn.conf
 ln -s /etc/apache2/conf-available/fqdn.conf /etc/apache2/conf-enabled/fqdn.conf
+ln -s /etc/apache2/mods-available/headers.load /etc/apache2/mods-enabled/
 
 a2enmod cgi rewrite
 a2enconf zoneminder
