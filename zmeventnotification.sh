@@ -1,3 +1,3 @@
 #!/bin/sh
 
-exec chpst -u root /usr/bin/zmeventnotification.pl 2>&1
+exec chpst -u www-data /usr/bin/zmeventnotification.pl 2>&1
