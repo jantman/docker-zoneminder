@@ -58,7 +58,7 @@ if [ -f /var/cache/zoneminder/configured ]; then
           sleep 3
           echo "waiting for mysql ..."
         done
-        zmupdate.pl
+        zmupdate.pl -nointeractive
         rm -rf /var/run/zm/*
         /sbin/zm.sh&
 else
@@ -80,7 +80,7 @@ else
         #needed to fix problem with ubuntu ... and cron
         update-locale
         date > /var/cache/zoneminder/configured
-        zmupdate.pl
+        zmupdate.pl -nointeractive
         rm -rf /var/run/zm/*
         /sbin/zm.sh&
 fi
