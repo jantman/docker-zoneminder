@@ -58,6 +58,7 @@ if [ -f /var/cache/zoneminder/configured ]; then
           sleep 3
           echo "waiting for mysql ..."
         done
+        zmupdate.pl
         rm -rf /var/run/zm/*
         /sbin/zm.sh&
 else
