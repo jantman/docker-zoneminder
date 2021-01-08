@@ -1,8 +1,26 @@
-# docker-zoneminder
+# jantman/docker-zoneminder
 
 Docker container for [zoneminder v1.32.3][3]
 
 "ZoneMinder the top Linux video camera security and surveillance solution. ZoneMinder is intended for use in single or multi-camera video security applications, including commercial or home CCTV, theft prevention and child, family member or home monitoring and other domestic care scenarios such as nanny cam installations. It supports capture, analysis, recording, and monitoring of video data coming from one or more video or network cameras attached to a Linux system. ZoneMinder also support web and semi-automatic control of Pan/Tilt/Zoom cameras using a variety of protocols. It is suitable for use as a DIY home video security system and for commercial or professional video security and surveillance. It can also be integrated into a home automation system via X.10 or other protocols. If you're looking for a low cost CCTV system or a more flexible alternative to cheap DVR systems then why not give ZoneMinder a try?"
+
+## Differences from upstream QuantumObject/docker-zoneminder
+
+This repo/image is forked from [QuantumObject/docker-zoneminder](https://github.com/QuantumObject/docker-zoneminder) / [quantumobject/docker-zoneminder](https://hub.docker.com/r/quantumobject/docker-zoneminder) for my own purposes. The differences are as follows:
+
+* cambozola has been removed, as I don't use it
+* zmeventnotification.pl is being used at version 6.0.6
+* Apache2 mod_headers is enabled, so you can set CORS headers if you need
+* Various database changes, with the assumption that you're creating the initial database and users outside of this image/container:
+  * the ZM database name, user, and password are set in ``/etc/zm/zm.conf`` at startup
+  * ``mysqladmin ping`` is changed to use the ZM user and password, instead of the MySQL root user and password
+  * MySQL root user and password are no longer needed
+* improvements to the config copying/linking process, for existing configurations; link in ``zmeventnotification_secrets.ini`` and apache2 ``zoneminder.conf`` if present
+* run ``zmupdate.pl -nointeractive`` on _every_ start up, to gracefully handle ZM upgrades
+
+### WARNING - Automatic Database Upgrades
+
+This image runs ``zmupdate.pl -nointeractive`` on every startup, to upgrade the ZoneMinder MySQL database when the ZM version (Docker image version) is updated. This could potentially be dangerous. It's assumed that you're (1) regularly backing up your database, (2) backing up your database before updating the image, and (3) using a specific tag version of the image, to ensure that updates only happen intentionally.
 
 ## Install dependencies
 
