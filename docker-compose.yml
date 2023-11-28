@@ -7,7 +7,7 @@ volumes:
 services:
 # mariaDB Container
   db:
-    image: mariadb:10.11-rc
+    image: mariadb:11.1-jammy
     restart: always
     command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
     volumes:
@@ -16,24 +16,22 @@ services:
 # It is strongly recommended to change these identifiers by other more secure ones.
 # Don't forget to report them in the app service below.
       - MYSQL_ROOT_PASSWORD=rtpsw
-      - MYSQL_PASSWORD=psw
-      - MYSQL_DATABASE=glpi
-      - MYSQL_USER=user
+      - MYSQL_PASSWORD=zmpass
+      - MYSQL_DATABASE=zm
+      - MYSQL_USER=zmuser
 
 #GLPI Container
   app:
-    image: jantman/docker-glpi
+    image: jantman/docker-zoneminder
     restart: always
     ports:
       - 80:80
     links:
       - db
+    tmpfs:
+      - /tmp
+      - /run
     volumes:
-      - ./data:/app/data
-      - ./config:/app/config
-      - ./log:/app/log
-    environment:
-      - MYSQL_PASSWORD=psw
-      - MYSQL_DATABASE=glpi
-      - MYSQL_USER=user
-      - MYSQL_HOST=db
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - ./cache:/var/cache/zoneminder
+      - ./log:/var/log/zm

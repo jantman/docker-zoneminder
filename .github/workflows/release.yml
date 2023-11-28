@@ -1,3 +1,9 @@
+# Workflow Requirements:
+#
+# 1. In repository Settings -> Actions -> General, ensure "Allow all actions and reusable workflows" is selected, and that under "Workflow permissions", "Read repository contents and packages permissions" is checked.
+# 2. On https://hub.docker.com click your username in the top right, then Account Settings, then select "Security" from the left nav menu; generate a new Access Token for this repo with read & write perms.
+# 3. In repository Settings -> Secrets and variables -> Actions, create a new Repository secret; call it ``DOCKERHUB_TOKEN`` and paste the Docker Hub access token you just created as the value.
+#
 name: Release on Tag
 on:
   push:
