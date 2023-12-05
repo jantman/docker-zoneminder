@@ -9,6 +9,7 @@ ENV ZM_DB_PASS=zmpass
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt update \
     && apt install --yes --no-install-recommends \
+         build-essential \
          apache2 \
          libjson-perl \
          mariadb-client \
