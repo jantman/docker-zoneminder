@@ -65,5 +65,3 @@ fi
 
 su -c 'zmupdate.pl -f' -s /bin/bash www-data
 rm -rf /var/run/zm/*
-
-exec /usr/lib/systemd/systemd --system --unit=basic.target

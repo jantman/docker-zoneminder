@@ -1,8 +1,6 @@
 # Base Image
 FROM debian:12.2
 
-USER root
-
 ENV ZM_DB_HOST=mariadb
 ENV ZM_DB_NAME=zm
 ENV ZM_DB_USER=zmuser
@@ -15,14 +13,11 @@ RUN apt update \
          apache2 \
          libjson-perl \
          mariadb-client \
-         systemd \
-         systemd-sysv \
+         s6 \
          zoneminder \
     && apt-get clean \
     && a2enmod rewrite \
-    && a2enmod cgi \
-    && systemctl enable apache2 \
-    && systemctl enable zoneminder
+    && a2enmod cgi
 
 COPY ./content/ /tmp/
 
@@ -44,6 +39,7 @@ VOLUME /var/log/zm
 # Copy entrypoint make it as executable and run it
 COPY entrypoint.sh /opt/
 RUN chmod +x /opt/entrypoint.sh
+
 ENTRYPOINT [ "/bin/bash", "-c", "source ~/.bashrc && /opt/entrypoint.sh ${@}", "--" ]
 
 EXPOSE 80
