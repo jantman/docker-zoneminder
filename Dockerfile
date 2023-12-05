@@ -1,6 +1,8 @@
 # Base Image
 FROM debian:12.2
 
+USER root
+
 ENV ZM_DB_HOST=mariadb
 ENV ZM_DB_NAME=zm
 ENV ZM_DB_USER=zmuser
@@ -14,6 +16,7 @@ RUN apt update \
          libjson-perl \
          mariadb-client \
          systemd \
+         systemd-sysv \
          zoneminder \
     && apt-get clean \
     && a2enmod rewrite \

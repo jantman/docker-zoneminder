@@ -63,7 +63,7 @@ else
     mariadb -u $ZM_DB_USER -p$ZM_DB_PASS -h $ZM_DB_HOST $ZM_DB_NAME < /usr/share/zoneminder/db/triggers.sql
 fi
 
-zmupdate.pl -f
+su -c 'zmupdate.pl -f' -s /bin/bash www-data
 rm -rf /var/run/zm/*
 
-/lib/systemd/systemd
+exec /usr/lib/systemd/systemd --system --unit=basic.target
