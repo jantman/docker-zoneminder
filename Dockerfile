@@ -22,12 +22,12 @@ RUN apt update \
 
 COPY ./content/ /tmp/
 
-RUN install -m 0644 -o root -g root /tmp/content/zoneminder.conf /etc/apache2/conf-available/zoneminder.conf \
+RUN install -m 0644 -o root -g root /tmp/zoneminder.conf /etc/apache2/sites-available/zoneminder.conf \
     && install -m 0644 -o www-data -g www-data /dev/null /etc/zm/conf.d/zmcustom.conf \
-    && install -m 0755 -o www-data -g www-data /tmp/content/zmeventnotification.pl /usr/bin/zmeventnotification.pl \
-    && install -m 0755 -o www-data -g www-data /tmp/content/zmeventnotification.ini /etc/zm/zmeventnotification.ini \
-    && install -m 0644 -o www-data -g www-data /tmp/content/es_rules.json /etc/zm/es_rules.json \
+    && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification.pl /usr/bin/zmeventnotification.pl \
     && install -m 0755 -o www-data -g www-data -d /var/lib/zmeventnotification /var/lib/zmeventnotification/push /var/lib/zmeventnotification/bin \
+    && install -m 0755 -o www-data -g www-data /tmp/pushapi_pushover.py /var/lib/zmeventnotification/bin/pushapi_pushover.py \
+    && rm -Rf /tmp/* \
     && a2ensite zoneminder
 
 # zmeventnotification installation
