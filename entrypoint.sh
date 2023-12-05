@@ -66,4 +66,4 @@ fi
 zmupdate.pl -f
 rm -rf /var/run/zm/*
 
-/sbin/init
+/lib/systemd/systemd
