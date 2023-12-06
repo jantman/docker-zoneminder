@@ -25,4 +25,5 @@ services:
       - mariadb
     volumes:
       - ./cache:/var/cache/zoneminder
-      - ./log:/var/log/zm
+      - ./zm-log:/var/log/zm
+      - ./apache2-log:/var/log/apache2

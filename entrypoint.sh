@@ -26,8 +26,8 @@ chown -R root:www-data /etc/zm /var/log/zm
 chmod -R 770 /etc/zm /var/log/zm
 [[ -e /run/zm ]] || install -m 0750 -o www-data -g www-data -d /run/zm
 
-ln -s /dev/stdout /var/log/zm/zmpkg.log
-ln -s /dev/stdout /var/log/zm/zmupdate.log
+[[ -e /var/log/zm/zmpkg.log ]] || ln -s /dev/stdout /var/log/zm/zmpkg.log
+[[ -e /var/log/zm/zmupdate.log ]] || ln -s /dev/stdout /var/log/zm/zmupdate.log
 
 # waiting for mysql
 echo "Pinging MySQL database server"
