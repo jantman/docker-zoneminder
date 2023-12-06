@@ -26,6 +26,10 @@ RUN install -m 0644 -o root -g root /tmp/zoneminder.conf /etc/apache2/sites-avai
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification.pl /usr/bin/zmeventnotification.pl \
     && install -m 0755 -o www-data -g www-data -d /var/lib/zmeventnotification /var/lib/zmeventnotification/push /var/lib/zmeventnotification/bin \
     && install -m 0755 -o www-data -g www-data /tmp/pushapi_pushover.py /var/lib/zmeventnotification/bin/pushapi_pushover.py \
+    && install -m 0755 -o root -g root -d /etc/services.d /etc/services.d/zoneminder /etc/services.d/apache2 \
+    && install -m 0755 -o root -g root /tmp/zoneminder-run /etc/services.d/zoneminder/run \
+    && install -m 0755 -o root -g root /tmp/zoneminder-finish /etc/services.d/zoneminder/finish \
+    && install -m 0755 -o root -g root /tmp/apache2-run /etc/services.d/apache2/run \
     && rm -Rf /tmp/* \
     && a2ensite zoneminder
 

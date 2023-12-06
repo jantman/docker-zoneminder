@@ -5,33 +5,24 @@ volumes:
   db:
 
 services:
-# mariaDB Container
-  db:
+  mariadb:
     image: mariadb:11.1-jammy
     restart: always
     command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
     volumes:
       - ./db:/var/lib/mysql
     environment:
-# It is strongly recommended to change these identifiers by other more secure ones.
-# Don't forget to report them in the app service below.
-      - MYSQL_ROOT_PASSWORD=rtpsw
       - MYSQL_PASSWORD=zmpass
       - MYSQL_DATABASE=zm
       - MYSQL_USER=zmuser
-
-#GLPI Container
-  app:
-    image: jantman/docker-zoneminder
+      - MARIADB_ROOT_PASSWORD=w8t67u23789t
+  zm:
+    image: jantman/docker-zoneminder:devel
     restart: always
     ports:
       - 80:80
     links:
-      - db
-    tmpfs:
-      - /tmp
-      - /run
+      - mariadb
     volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
       - ./cache:/var/cache/zoneminder
       - ./log:/var/log/zm

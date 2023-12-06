@@ -1,0 +1,20 @@
+#!/bin/bash
+# ==============================================================================
+# ZoneMinder
+# Runs ZoneMinder
+# ==============================================================================
+
+echo "Starting ZoneMinder..."
+s6-setuidgid www-data /usr/bin/zmpkg.pl start
+
+# zmpkg.pl is blocking so no need to wait
+echo "ZoneMinder is up! Proceeding to monitoring."
+
+# Need to sleep to act like service is running
+# Terminate container if zm dies
+until [ "$(pgrep -fc /usr/bin/zm)" -lt "1" ]; do
+  sleep 1
+done
+ps aux
+>&2 echo "ZoneMinder has crashed! Exiting..."
+exit 1
