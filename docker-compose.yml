@@ -8,7 +8,7 @@ services:
   mariadb:
     image: mariadb:11.1-jammy
     restart: always
-    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW --default-time-zone=America/New_York
     volumes:
       - ./db:/var/lib/mysql
     environment:
@@ -19,10 +19,14 @@ services:
   zm:
     image: jantman/docker-zoneminder:devel
     restart: always
+    shm_size: 1G
     ports:
       - 8080:80
     links:
       - mariadb
+    tmpfs:
+      - /run
+      - /tmp
     volumes:
       - ./cache:/var/cache/zoneminder
       - ./zm-log:/var/log/zm

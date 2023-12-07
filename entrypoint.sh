@@ -22,15 +22,18 @@ if [ ! -d /var/cache/zoneminder/events ]; then
 fi
 
 echo "chown and chmod /etc/zm and /var/log/zm"
-chown -R root:www-data /etc/zm /var/log/zm
+chown -R root:www-data /etc/zm
+chown -R www-data:www-data /var/log/zm
 chmod -R 770 /etc/zm /var/log/zm
 [[ -e /run/zm ]] || install -m 0750 -o www-data -g www-data -d /run/zm
 
-[[ -e /var/log/zm/zmpkg.log ]] || ln -s /dev/stdout /var/log/zm/zmpkg.log
-[[ -e /var/log/zm/zmupdate.log ]] || ln -s /dev/stdout /var/log/zm/zmupdate.log
-
 echo "Setting PHP timezone"
 sed -i "s|;date\.timezone =.*|date.timezone = ${TZ}|" /etc/php/8.2/apache2/php.ini
+
+echo "Setting up directories in /run tmpfs"
+install -m 0755 -o root -g root -d /run/apache2
+install -m 1777 -o root -g root -d /run/lock
+install -m 0755 -o www-data -g www-data -d /run/zm /run/apache2/socks /run/lock/apache2
 
 # waiting for mysql
 echo "Pinging MySQL database server"
@@ -71,6 +74,5 @@ else
 fi
 
 su -c 'zmupdate.pl -f' -s /bin/bash www-data
-rm -rf /var/run/zm/*
 
 /usr/bin/s6-svscan /etc/services.d
