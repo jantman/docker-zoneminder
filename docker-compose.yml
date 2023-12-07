@@ -20,10 +20,13 @@ services:
     image: jantman/docker-zoneminder:devel
     restart: always
     ports:
-      - 80:80
+      - 8080:80
     links:
       - mariadb
     volumes:
       - ./cache:/var/cache/zoneminder
       - ./zm-log:/var/log/zm
       - ./apache2-log:/var/log/apache2
+      - ./es_rules.EXAMPLE.json:/etc/zm/es_rules.json
+      - ./secrets.EXAMPLE.ini:/etc/zm/secrets.ini
+      - ./zmeventnotification.EXAMPLE.ini:/etc/zm/zmeventnotification.ini

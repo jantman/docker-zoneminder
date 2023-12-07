@@ -1,3 +1,4 @@
 ./cache
 ./log
 db/
+apache2-log/
