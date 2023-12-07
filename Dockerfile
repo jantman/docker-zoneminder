@@ -5,19 +5,29 @@ ENV ZM_DB_HOST=mariadb
 ENV ZM_DB_NAME=zm
 ENV ZM_DB_USER=zmuser
 ENV ZM_DB_PASS=zmpass
+# this is just a default
+ENV TZ=America/New_York
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt update \
     && apt install --yes --no-install-recommends \
-         build-essential \
          apache2 \
+         build-essential \
+         ffmpeg \
+         gnupg2 \
+         libapache2-mod-php \
          libjson-perl \
+         lsb-release \
          mariadb-client \
+         php \
+         php-mysql \
          s6 \
          zoneminder \
     && apt-get clean \
     && a2enmod rewrite \
-    && a2enmod cgi
+    && a2enmod cgi \
+    && a2enmod headers \
+    && a2enmod expires
 
 COPY ./content/ /tmp/
 

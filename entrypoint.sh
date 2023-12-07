@@ -29,6 +29,9 @@ chmod -R 770 /etc/zm /var/log/zm
 [[ -e /var/log/zm/zmpkg.log ]] || ln -s /dev/stdout /var/log/zm/zmpkg.log
 [[ -e /var/log/zm/zmupdate.log ]] || ln -s /dev/stdout /var/log/zm/zmupdate.log
 
+echo "Setting PHP timezone"
+sed -i "s|;date\.timezone =.*|date.timezone = ${TZ}|" /etc/php/8.2/apache2/php.ini
+
 # waiting for mysql
 echo "Pinging MySQL database server"
 while !(mysql_ready); do
