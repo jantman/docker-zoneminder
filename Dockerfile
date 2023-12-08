@@ -23,6 +23,7 @@ RUN apt update \
          php \
          php-mysql \
          s6 \
+         strace \
          zoneminder \
     && apt-get clean \
     && a2enmod rewrite \

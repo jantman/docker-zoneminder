@@ -186,3 +186,21 @@ root@13f0d8732d7d:/var/log/zm# cat zmdc.log
 12/08/23 09:51:33.689277 zmdc[48].DB1 [ZMServer:869] [killall -q -s KILL zmtelemetry.pl]
 12/08/23 09:51:33.690841 zmdc[48].INF [ZMServer:411] [Socket should be open at /run/zm/zmdc.sock]
 ```
+
+Note that it looks like the debug logging WAS from the ZM configuration not the env vars; the env vars don't seem to do anything.
+
+So, I put the strace stuff back in, but now it seems like the zmdc behavior is different, it's only using 22% CPU. It's still failing to start zmdc correctly, but doesn't appear to be hogging all the CPU; maybe a side-effect of `strace`?
+
+```
+www-data      34 70.9  0.0   5032  3456 ?        R    10:38   1:19 strace -ff -o /var/log/zm/strace /usr/bin/zmpkg.pl start
+www-data      51 21.9  0.0  26108 14648 ?        R    10:38   0:24 /usr/bin/perl -wT /usr/bin/zmdc.pl startup
+```
+
+a bit later, right now:
+
+```
+www-data      34 70.7  0.0   5032  3456 ?        R    10:38   6:23 strace -ff -o /var/log/zm/strace /usr/bin/zmpkg.pl start
+www-data      51 22.0  0.0  26108 14648 ?        t    10:38   1:59 /usr/bin/perl -wT /usr/bin/zmdc.pl startup
+```
+
+Ok, with strace, it's been running 17 minutes now and still just stuck in the prlimit64/close loop but only usng 22% CPU.
