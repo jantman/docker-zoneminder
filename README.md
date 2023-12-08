@@ -204,3 +204,5 @@ www-data      51 22.0  0.0  26108 14648 ?        t    10:38   1:59 /usr/bin/perl
 ```
 
 Ok, with strace, it's been running 17 minutes now and still just stuck in the prlimit64/close loop but only usng 22% CPU.
+
+Let's try this with strace at startup toggleable by an env var, and then I'll start everything fresh from scratch and not strace, but attach once the process is running. Now I'll be able to set STRACE_ZMPKG=true if I want to strace at startup.
