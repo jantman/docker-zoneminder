@@ -206,3 +206,20 @@ www-data      51 22.0  0.0  26108 14648 ?        t    10:38   1:59 /usr/bin/perl
 Ok, with strace, it's been running 17 minutes now and still just stuck in the prlimit64/close loop but only usng 22% CPU.
 
 Let's try this with strace at startup toggleable by an env var, and then I'll start everything fresh from scratch and not strace, but attach once the process is running. Now I'll be able to set STRACE_ZMPKG=true if I want to strace at startup.
+
+Ok, just started without strace,
+
+```
+www-data      71 99.7  0.0  26088 14636 ?        R    11:04   0:42 /usr/bin/perl -wT /usr/bin/zmdc.pl startup
+```
+
+```
+root@c704e30eca79:/# strace -p 71 -f
+strace: attach: ptrace(PTRACE_SEIZE, 71): Operation not permitted
+```
+
+can't do that from within the container, need to find the process on the host and strace from there. I do that, and it appears to be still stuck in the prlimit64/close loop.
+
+Ok, I let that run for 40 minutes with strace attached to the process (from the host) and it never got out of the loop.
+
+**Ok,** At this point, it's clear that something just REALLY isn't working, and it doesn't make any sense. I could try running the container privileged, and I could try setting a limit on the number of open files in the container. Other than that, I think I need to either start over from scratch, or look at other _working_ images and see what's different about mine.
