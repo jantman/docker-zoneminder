@@ -27,10 +27,6 @@ services:
     tmpfs:
       - /run
       - /tmp
-    environment:
-      - ZM_DBG_LEVEL=9
-      - ZM_LOG_DEBUG=1
-      - ZM_LOG_DEBUG_LEVEL=9
     volumes:
       - ./cache:/var/cache/zoneminder
       - ./zm-log:/var/log/zm
