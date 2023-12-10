@@ -8,7 +8,7 @@ echo "Starting ZoneMinder..."
 if [[ "${STRACE_ZMPKG}" == "true" ]]; then
     s6-setuidgid www-data strace -ff -o /var/log/zm/strace /usr/bin/zmpkg.pl start
 else
-    s6-setuidgid www-data /usr/bin/zmpkg.pl start
+    su -c '/usr/bin/zmpkg.pl start' -s /bin/bash www-data
 fi
 
 # zmpkg.pl is blocking so no need to wait
