@@ -1,4 +1,5 @@
 .git
-./cache
-./log
-./db
+cache/
+zm-log/
+apache2-log/
+db/

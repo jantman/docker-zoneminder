@@ -22,8 +22,11 @@ RUN apt update \
          mariadb-client \
          php \
          php-mysql \
+         python3-pip \
+         python3-requests \
          s6 \
          zoneminder \
+    && /usr/bin/pip install --break-system-packages pyzm \
     && apt-get clean \
     && a2enmod rewrite \
     && a2enmod cgi \
