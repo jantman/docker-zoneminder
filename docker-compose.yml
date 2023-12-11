@@ -34,3 +34,4 @@ services:
       - ./es_rules.json:/etc/zm/es_rules.json
       - ./secrets.ini:/etc/zm/secrets.ini
       - ./zmeventnotification.ini:/etc/zm/zmeventnotification.ini
+      - ./objectconfig.ini:/etc/zm/objectconfig.ini
