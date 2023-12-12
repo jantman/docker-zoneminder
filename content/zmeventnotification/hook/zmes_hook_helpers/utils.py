@@ -175,12 +175,10 @@ def import_zm_zones(mid, reason):
 
     url = g.config['api_portal'] + '/zones/forMonitor/' + mid + '.json'
     g.logger.Debug(2,'Getting ZM zones using {}?username=xxx&password=yyy&user=xxx&pass=yyy'.format(url))
-    # ok, this is still being really lazy...
-    if g.config['user']:
-        url = url + '?username=' + g.config['user']
-        url = url + '&user=' + g.config['user']
-        url = url + '&password=' + urllib.parse.quote(g.config['password'], safe='')
-        url = url + '&pass=' + urllib.parse.quote(g.config['password'], safe='')
+    url = url + '?username=' + g.config['user']
+    url = url + '&password=' + urllib.parse.quote(g.config['password'], safe='')
+    url = url + '&user=' + g.config['user']
+    url = url + '&pass=' + urllib.parse.quote(g.config['password'], safe='')
 
     if g.config['api_portal'].lower().startswith('https://'):
         main_handler = urllib.request.HTTPSHandler(context=g.ctx)
@@ -200,8 +198,11 @@ def import_zm_zones(mid, reason):
         opener = urllib.request.build_opener(main_handler)
     try:
         input_file = opener.open(url)
+    except HTTPError as e:
+        g.logger.Error('HTTP Error in import_zm_zones:{}'.format(e))
+        raise
     except Exception as e:
-        g.logger.Error(f'Error in import_zm_zones while opening {url}: {e}')
+        g.logger.Error('General error in import_zm_zones:{}'.format(e))
         raise
 
     c = input_file.read()
@@ -415,14 +416,13 @@ def process_config(args, ctx):
             except:
                 raise
         else:
-            g.logger.Info(1,'No secrets file configured')
+            g.logger.Debug(1,'No secrets file configured')
         # now read config values
 
         # first, fill in config with default values
         for k,v in g.config_vals.items():
             val = v.get('default', None)
             g.config[k] = _correct_type(val, v['type'])
-        g.logger.Info(f'config with default values: {g.config}')
         # now iterate the file
         for sec in config_file.sections():
             if sec.startswith('monitor-'):
@@ -431,14 +431,11 @@ def process_config(args, ctx):
             if sec == 'secrets':
                 continue
             for (k, v) in config_file.items(sec):
-                g.logger.Info(f'config file section={sec} k={k} v={v}')
                 if g.config_vals.get(k):
-                    g.logger.Info(f'_set_config_val({k}, {g.config_vals[k]})')
                     _set_config_val(k,g.config_vals[k] )
                 else:
                     #g.logger.Debug(2, 'storing unknown attribute {}={}'.format(k,v))
-                    g.logger.Info(f'g.config[{k}]={v}')
-                    g.config[k] = v
+                    g.config[k] = v 
                     #_set_config_val(k,{'section': sec, 'default': None, 'type': 'string'} )
 
         if g.config['allow_self_signed'] == 'yes':
@@ -520,7 +517,6 @@ def process_config(args, ctx):
 
     # Now lets make sure we take care of parameter substitutions {{}}
 
-    g.logger.Info(f'Before parameter substitution: {g.config}')
 
     g.logger.Debug (3,'Finally, doing parameter substitution')
     p = r'{{(\w+?)}}'
@@ -544,7 +540,6 @@ def process_config(args, ctx):
             if not replaced:
                 break
 
-    g.logger.Info(f'After parameter substitution: {g.config}')
 
     # Now munge config if testing args provide
     if args.get('file'):
@@ -557,3 +552,5 @@ def process_config(args, ctx):
         g.logger.Debug (1,'Output path modified to {}'.format(args.get('output_path')))
         g.config['image_path'] = args.get('output_path')
         g.config['write_debug_image'] = 'yes'
+
+  
