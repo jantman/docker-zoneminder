@@ -173,14 +173,9 @@ def import_zm_zones(mid, reason):
         match_reason = True if g.config['only_triggered_zm_zones']=='yes' else False
     g.logger.Debug(2,'import_zm_zones: match_reason={} and reason={}'.format(match_reason, reason))
 
-    url = g.config['api_portal'] + '/zones/forMonitor/' + mid + '.json'
+    url, _ = g.build_url(g.config['api_portal'] + '/zones/forMonitor/' + mid + '.json')
     g.logger.Debug(2,'Getting ZM zones using {}?username=xxx&password=yyy&user=xxx&pass=yyy'.format(url))
     # ok, this is still being really lazy...
-    if g.config['user']:
-        url = url + '?username=' + g.config['user']
-        url = url + '&user=' + g.config['user']
-        url = url + '&password=' + urllib.parse.quote(g.config['password'], safe='')
-        url = url + '&pass=' + urllib.parse.quote(g.config['password'], safe='')
 
     if g.config['api_portal'].lower().startswith('https://'):
         main_handler = urllib.request.HTTPSHandler(context=g.ctx)

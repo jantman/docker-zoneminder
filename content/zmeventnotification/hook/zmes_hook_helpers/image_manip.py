@@ -16,9 +16,15 @@ import urllib.parse
 def createAnimation(frametype, eid, fname, types):
     import imageio
 
-    url = '{}/index.php?view=image&width={}&eid={}&username={}&password={}'.format(g.config['portal'],g.config['animation_width'],eid,g.config['user'],urllib.parse.quote(g.config['password'], safe=''))
-    api_url = '{}/events/{}.json?username={}&password={}'.format(g.config['api_portal'],eid,g.config['user'],urllib.parse.quote(g.config['password'], safe=''))
-    disp_api_url='{}/events/{}.json?username={}&password=***'.format(g.config['api_portal'],eid,g.config['user'])
+    url, _ = g.build_url(
+        f"{g.config['portal']}/index.php",
+        {
+            'view': 'image',
+            'width': g.config['animation_width'],
+            'eid': eid
+        }
+    )
+    api_url, disp_api_url = g.build_url(f"{g.config['api_portal']}/events/{eid}.json")
 
     rtries = g.config['animation_max_tries']
     sleep_secs = g.config['animation_retry_sleep']
@@ -91,7 +97,10 @@ def createAnimation(frametype, eid, fname, types):
     od_images = []
 
     # use frametype  (alarm/snapshot) to get od anchor, because fid can be wrong when translating from videos
-    od_url= '{}/index.php?view=image&eid={}&fid={}&username={}&password={}&width={}'.format(g.config['portal'],eid,frametype,g.config['user'],urllib.parse.quote(g.config['password'], safe=''),g.config['animation_width'])
+    od_url, _ = g.build_url(
+        f"{g.config['portal']}/index.php",
+        {'view': 'image', 'eid': eid, 'fid': frametype, 'width': g.config['animation_width']}
+    )
     g.logger.Debug (1,'Grabbing anchor frame: {}...'.format(frametype))
     try:
         od_frame = imageio.imread(od_url)

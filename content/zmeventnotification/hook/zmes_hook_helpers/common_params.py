@@ -1,3 +1,5 @@
+import urllib.parse
+from typing import Dict, Optional, Tuple
 # list of variables that are common 
 # do not include model specific variables 
 
@@ -5,6 +7,28 @@ ctx = None  # SSL context
 logger = None  # logging handler
 config = {}  # object that will hold config values
 polygons = []  # will contain mask(s) for a monitor
+
+
+def build_url(base: str, args: Optional[Dict[str, str]] = None) -> Tuple[str, str]:
+    """
+    Given a string base URL with path and a dictionary of query string arguments
+    (string key, string value) generate a URL including all args added to a query
+    string, along with the configured username and password if they are non-None.
+    Return a 2-tuple of string paths, one for use in requests and one with the password
+    replaced with asterisks, for log messages.
+    """
+    if args is None:
+        args = {}
+    if config['user']:
+        args.update({'user': config['user'], 'username': config['user']})
+    if config['password']:
+        args.update({'pass': config['password'], 'password': config['password']})
+    url = base + '?' + urllib.parse.urlencode(args, doseq=True)
+    if config['password']:
+        args.update({'pass': '****', 'password': '****'})
+    log_url = base + '?' + urllib.parse.urlencode(args, doseq=True)
+    return url, log_url
+
 
 # valid config keys and defaults
 config_vals = {
