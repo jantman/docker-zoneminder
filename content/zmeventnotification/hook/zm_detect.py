@@ -268,7 +268,8 @@ def main_handler():
     else:
         log.init(name='zmesdetect',override=g.config['pyzm_overrides'])
     g.logger = log
-    
+    g.logger.Info(f"Got config from: {args.get('config')}")
+
     es_version='(?)'
     try:
         es_version=subprocess.check_output(['/usr/bin/zmeventnotification.pl', '--version']).decode('ascii')
@@ -320,17 +321,18 @@ def main_handler():
 
     import pyzm.api as zmapi
     api_options  = {
-    'apiurl': g.config['api_portal'],
-    'portalurl': g.config['portal'],
-    'user': g.config['user'],
-    'password': g.config['password'] ,
-    'basic_auth_user': g.config['basic_user'],
-    'basic_auth_password': g.config['basic_password'],
-    'logger': g.logger, # use none if you don't want to log to ZM,
-    'disable_ssl_cert_check': False if g.config['allow_self_signed']=='no' else True
+        'apiurl': g.config['api_portal'],
+        'portalurl': g.config['portal'],
+        'user': g.config['user'],
+        'password': g.config['password'] ,
+        'basic_auth_user': g.config['basic_user'],
+        'basic_auth_password': g.config['basic_password'],
+        'logger': g.logger, # use none if you don't want to log to ZM,
+        'disable_ssl_cert_check': False if g.config['allow_self_signed']=='no' else True
     }
 
-    g.logger.Info('Connecting with ZM APIs')
+    g.logger.Info(f'Connecting with ZM APIs: {api_options}')
+
     zmapi = zmapi.ZMApi(options=api_options)
     stream = args.get('eventid') or args.get('file')
     ml_options = {}
