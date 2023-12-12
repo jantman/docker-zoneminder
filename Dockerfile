@@ -31,7 +31,6 @@ RUN apt update \
          mariadb-client \
          php \
          php-mysql \
-         python3-opencv \
          python3-pip \
          python3-requests \
          s6 \
@@ -56,14 +55,13 @@ RUN install -m 0644 -o root -g root /tmp/zm-site.conf /etc/apache2/sites-availab
     && install -m 0755 -o root -g root /tmp/apache2-run /etc/services.d/apache2/run \
     && a2dissite 000-default \
     && a2ensite zm-site \
-    && bash -c 'install -m 0755 -o www-data -g www-data -d /var/lib/zmeventnotification /var/lib/zmeventnotification/{bin,contrib,images,mlapi,known_faces,unknown_faces,models/yolov3,models/tinyyolov3,models/tinyyolov4,models/yolov4,models/coral_edgetpu,misc,push}' \
+    && bash -c 'install -m 0755 -o www-data -g www-data -d /var/lib/zmeventnotification /var/lib/zmeventnotification/{bin,contrib,images,mlapi,known_faces,unknown_faces,misc,push}' \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/zmeventnotification.pl /usr/bin/zmeventnotification.pl \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/pushapi_plugins/pushapi_pushover.py /var/lib/zmeventnotification/bin/pushapi_pushover.py \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/hook/zm_event_start.sh /var/lib/zmeventnotification/bin/zm_event_start.sh \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/hook/zm_event_end.sh /var/lib/zmeventnotification/bin/zm_event_end.sh \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/hook/zm_detect.py /var/lib/zmeventnotification/bin/zm_detect.py \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/hook/zm_train_faces.py /var/lib/zmeventnotification/bin/zm_train_faces.py \
-    && bash /tmp/model_installer.sh \
     && cd /tmp/zmeventnotification/hook && pip -v install --break-system-packages . \
     && rm -Rf /tmp/*
 
