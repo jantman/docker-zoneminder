@@ -1,8 +1,9 @@
-./cache
-./log
+cache/
+zm-log/
 db/
 apache2-log/
 es_rules.json
 secrets.ini
 zmeventnotification.ini
 objectconfig.ini
+mlapiconfig.ini
