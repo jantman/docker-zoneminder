@@ -11,12 +11,29 @@ import argparse
 import datetime
 import os
 import traceback
+import logging
+import json
+import numpy as np
 
 # Modules that load cv2 will go later 
 # so we can log misses
 import pyzm.ZMLog as log 
 import zmes_hook_helpers.common_params as g
 from pyzm import __version__ as pyzm_version
+
+if os.environ.get('LOG_DEBUG', '') == 'true':
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s [%(levelname)s %(filename)s:%(lineno)s - "
+               "%(name)s.%(funcName)s() ] %(message)s"
+    )
+else:
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="[%(asctime)s %(levelname)s] %(message)s"
+    )
+logger: logging.Logger = logging.getLogger()
+
 
 auth_header = None
 
@@ -27,7 +44,9 @@ def remote_detect(stream=None, options=None, api=None, args=None):
 
     import requests
     import cv2
-    
+    import time
+    import imutils
+
     bbox = []
     label = []
     conf = []
@@ -49,7 +68,8 @@ def remote_detect(stream=None, options=None, api=None, args=None):
                 data = json.load(json_file)
                 json_file.close()
             except Exception as e: 
-                g.logger.Error('Error loading login.json: {}'.format(e))
+                g.logger.Error('Error loading {}: {}'.format(data_file, e))
+                logger.error('Error loading %s: %s', data_file, e, exc_info=True)
                 os.remove(data_file)
                 access_token = None
             else:
@@ -67,11 +87,14 @@ def remote_detect(stream=None, options=None, api=None, args=None):
     if not access_token:
         g.logger.Debug(1, 'Invoking remote API login')
         r = requests.post(url=login_url,
-                          data=json.dumps({
+                          json={
                               'username': g.config['ml_user'],
                               'password': g.config['ml_password'],
-                          }),
+                          },
                           headers={'content-type': 'application/json'})
+        logger.debug(
+            'POST to %s returned HTTP %d', login_url, r.status_code
+        )
         data = r.json()
         access_token = data.get('access_token')
         if not access_token:
@@ -124,6 +147,7 @@ def remote_detect(stream=None, options=None, api=None, args=None):
     
     start = datetime.datetime.now()
     try:
+        logger.debug('POSTing to %s', object_url)
         r = requests.post(url=object_url,
                         headers=auth_header,
                         params=params,
@@ -137,10 +161,14 @@ def remote_detect(stream=None, options=None, api=None, args=None):
                             'ml_overrides':ml_overrides
                         }
                         )
+        logger.debug(
+            'POST to %s returned HTTP %d', object_url, r.status_code
+        )
         r.raise_for_status()
     except Exception as e:
         g.logger.Error('Error during remote post: {}'.format(str(e)))
         g.logger.Debug(2, traceback.format_exc())
+        logger.error('Error during remote post: {}'.format(str(e)), exc_info=True)
         raise
 
     diff_time = (datetime.datetime.now() - start)
@@ -149,16 +177,15 @@ def remote_detect(stream=None, options=None, api=None, args=None):
     #print(r)
     matched_data = data['matched_data']
     if args.get('file'):
-
         matched_data['image'] = cmdline_image
     if g.config['write_image_to_zm'] == 'yes'  and matched_data['frame_id']:
         url = '{}/index.php?view=image&eid={}&fid={}'.format(g.config['portal'], stream,matched_data['frame_id'] )
         g.logger.Debug(2, 'Grabbing image from {} as we need to write objdetect.jpg'.format(url))
+        logger.debug('Grabbing image from %s as we need to write objdetect.jpg', url)
         try:
             response = api._make_request(url=url,  type='get')
             img = np.asarray(bytearray(response.content), dtype='uint8')
             img = cv2.imdecode(img, cv2.IMREAD_COLOR)
-           
             #newh =matched_data['image_dimensions']['resized'][0]
             if matched_data['image_dimensions'] and matched_data['image_dimensions']['resized']:
                 neww =min(matched_data['image_dimensions']['resized'][1], img.shape[1])
@@ -170,7 +197,7 @@ def remote_detect(stream=None, options=None, api=None, args=None):
                     g.logger.Debug(2, 'No need to resize as image widths are same from mlapi and zm_detect: {}'.format(neww))
             matched_data['image'] = img
         except Exception as e:
-            g.logger.Error('Error during image grab: {}'.format(str(e)))
+            g.logger.Error('Error during image grab: {}\n{}'.format(str(e), traceback.format_exc()))
             g.logger.Debug(2, traceback.format_exc())
     return data['matched_data'], data['all_matches']
 
@@ -266,7 +293,6 @@ def main_handler():
 
     g.logger.Debug(1, '---------| app:{}, pyzm:{}, ES:{} , OpenCV:{}|------------'.format(__app_version__, pyzm_version, es_version, cv2.__version__))
    
-    import numpy as np
     import re
     import imutils
     import ssl
@@ -313,14 +339,14 @@ def main_handler():
 
     import pyzm.api as zmapi
     api_options  = {
-    'apiurl': g.config['api_portal'],
-    'portalurl': g.config['portal'],
-    'user': g.config['user'],
-    'password': g.config['password'] ,
-    'basic_auth_user': g.config['basic_user'],
-    'basic_auth_password': g.config['basic_password'],
-    'logger': g.logger, # use none if you don't want to log to ZM,
-    'disable_ssl_cert_check': False if g.config['allow_self_signed']=='no' else True
+        'apiurl': g.config['api_portal'],
+        'portalurl': g.config['portal'],
+        'user': g.config['user'],
+        'password': g.config['password'] ,
+        'basic_auth_user': g.config['basic_user'],
+        'basic_auth_password': g.config['basic_password'],
+        'logger': g.logger, # use none if you don't want to log to ZM,
+        'disable_ssl_cert_check': False if g.config['allow_self_signed']=='no' else True
     }
 
     g.logger.Debug(1, 'Connecting with ZM APIs')
@@ -329,7 +355,7 @@ def main_handler():
     ml_options = {}
     stream_options={}
     secrets = None 
-    
+
     if g.config['ml_sequence'] and g.config['use_sequence'] == 'yes':
         g.logger.Debug(2, 'using ml_sequence')
         ml_options = g.config['ml_sequence']
@@ -390,21 +416,20 @@ def main_handler():
         stream_options['api'] = None
         start = datetime.datetime.now()
         try:
-            matched_data,all_data = remote_detect(stream=stream, options=stream_options, api=zmapi, args=args)
+            g.logger.Info(f'Calling mlapi remote_detect on stream={stream} options={stream_options} args={args}')
+            matched_data, all_data = remote_detect(stream=stream, options=stream_options, api=zmapi, args=args)
             diff_time = (datetime.datetime.now() - start)
             g.logger.Debug(1, 'Total remote detection detection took: {}'.format(diff_time))
+            g.logger.Info(f'result in {diff_time} - matched_data={matched_data}')
         except Exception as e:
-            g.logger.Error("Error with remote mlapi:{}".format(e))
-            g.logger.Debug(2, traceback.format_exc())
-
+            g.logger.Error("Error with remote mlapi: {}\n{}".format(e, traceback.format_exc()))
+            logger.error('Error while calling remote mlapi: %s', e, exc_info=True)
             if g.config['ml_fallback_local'] == 'yes':
                 g.logger.Debug(1, "Falling back to local detection")
                 stream_options['api'] = zmapi
                 from pyzm.ml.detect_sequence import DetectSequence
                 m = DetectSequence(options=ml_options, global_config=g.config)
                 matched_data,all_data = m.detect_stream(stream=stream, options=stream_options)
-    
-
     else:
         if not args['file'] and int(g.config['wait']) > 0:
             g.logger.Debug(1, 'Sleeping for {} seconds before inferencing'.format(
@@ -414,19 +439,7 @@ def main_handler():
         m = DetectSequence(options=ml_options, global_config=g.config)
         if args.get('monitorid'):
             stream_options['mid'] = args.get('monitorid')
-
-        matched_data,all_data = m.detect_stream(stream=stream, options=stream_options)
-    
-    '''
-     matched_data = {
-            'boxes': matched_b,
-            'labels': matched_l,
-            'confidences': matched_c,
-            'frame_id': matched_frame_id,
-            'image_dimensions': self.media.image_dimensions(),
-            'image': matched_frame_img
-        }
-    '''
+        matched_data, all_data = m.detect_stream(stream=stream, options=stream_options)
 
     obj_json = {
         'labels': matched_data['labels'],
@@ -540,8 +553,7 @@ def main_handler():
                 except Exception as e:
                     g.logger.Error('Error creating animation:{}'.format(e))
                     g.logger.Error('animation: Traceback:{}'.format(traceback.format_exc()))
-                
-            
+
 
 if __name__ == '__main__':
     try:
