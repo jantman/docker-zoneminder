@@ -14,6 +14,7 @@ RUN apt update \
     && apt-get install --yes \
          apache2 \
          build-essential \
+         cpanminus \
          ffmpeg \
          gifsicle \
          git \
@@ -44,7 +45,7 @@ RUN apt update \
     && a2enmod headers \
     && a2enmod expires
 
-RUN /usr/bin/perl -MCPAN -e "install Net::WebSocket::Server"
+RUN /usr/bin/cpanm -i 'Net::WebSocket::Server'
 
 COPY ./content/ /tmp/
 
