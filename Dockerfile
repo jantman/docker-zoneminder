@@ -33,6 +33,7 @@ RUN apt update \
          php-mysql \
          python3-pip \
          python3-requests \
+         python3-opencv \
          s6 \
          wget \
          zoneminder \
