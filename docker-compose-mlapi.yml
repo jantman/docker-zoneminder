@@ -1,0 +1,54 @@
+version: '2'
+
+volumes:
+  data:
+  db:
+
+services:
+  mariadb:
+    image: mariadb:11.1-jammy
+    restart: always
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW --default-time-zone=America/New_York
+    volumes:
+      - ./db:/var/lib/mysql
+    environment:
+      - MYSQL_PASSWORD=zmpass
+      - MYSQL_DATABASE=zm
+      - MYSQL_USER=zmuser
+      - MARIADB_ROOT_PASSWORD=w8t67u23789t
+  mlapi:
+    image: jantman/docker-zm-mlapi:devel
+    restart: always
+    ports:
+      - 8088:80
+    depends_on:
+      - zm
+    tmpfs:
+      - /run
+      - /tmp
+    volumes:
+      - ./data:/var/lib/zmeventnotification
+      - ./cache:/var/cache/zoneminder
+      - ./mlapiconfig.ini:/etc/mlapiconfig.ini
+      - ./secrets.ini:/etc/secrets.ini
+  zm:
+    image: jantman/docker-zoneminder:devel
+    restart: always
+    shm_size: 1G
+    ports:
+      - 8080:80
+    depends_on:
+      - mariadb
+    tmpfs:
+      - /run
+      - /tmp
+    environment:
+      - LOG_DEBUG=true
+    volumes:
+      - ./cache:/var/cache/zoneminder
+      - ./zm-log:/var/log/zm
+      - ./apache2-log:/var/log/apache2
+      - ./es_rules.json:/etc/zm/es_rules.json
+      - ./secrets.ini:/etc/zm/secrets.ini
+      - ./zmeventnotification.ini:/etc/zm/zmeventnotification.ini
+      - ./objectconfig.ini:/etc/zm/objectconfig.ini
