@@ -9,3 +9,5 @@ Modern, best-practices Debian-based Zoneminder container
 This repo attempts to provide a modern, best-practices Docker image for current ZoneMinder versions, using a current Debian version base. The image provides ZoneMinder and Apache but (like a proper Docker image) requires an external MySQL server. The image is vehemently NOT auto-updating, as doing so in a Docker image is a mortal sin. If you want to update, then pull a newer tag.
 
 **NOTE:** If you want to use the event server, then you'll need to mount the appropriate configuration files in to the image at ``/etc/zm/es_rules.json``, ``/etc/zm/zmeventnotification.ini``, and ``/etc/zm/secrets.ini``; examples are included in this repo.
+
+In addition, the output of `mod_status` is exposed at `/server-status`.

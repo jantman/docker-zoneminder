@@ -55,6 +55,7 @@ RUN install -m 0644 -o root -g root /tmp/zm-site.conf /etc/apache2/sites-availab
     && install -m 0755 -o root -g root /tmp/zoneminder-run /etc/services.d/zoneminder/run \
     && install -m 0755 -o root -g root /tmp/zoneminder-finish /etc/services.d/zoneminder/finish \
     && install -m 0755 -o root -g root /tmp/apache2-run /etc/services.d/apache2/run \
+    && install -m 0644 -o root -g root /tmp/status.conf /etc/apache2/mods-available/status.conf \
     && a2dissite 000-default \
     && a2ensite zm-site \
     && bash -c 'install -m 0755 -o www-data -g www-data -d /var/lib/zmeventnotification /var/lib/zmeventnotification/{bin,contrib,images,mlapi,known_faces,unknown_faces,misc,push}' \
