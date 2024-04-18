@@ -65,8 +65,8 @@ RUN install -m 0644 -o root -g root /tmp/zm-site.conf /etc/apache2/sites-availab
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/hook/zm_event_end.sh /var/lib/zmeventnotification/bin/zm_event_end.sh \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/hook/zm_detect.py /var/lib/zmeventnotification/bin/zm_detect.py \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/hook/zm_train_faces.py /var/lib/zmeventnotification/bin/zm_train_faces.py \
+    && pip install --break-system-packages newrelic \
     && cd /tmp/zmeventnotification/hook && pip -v install --break-system-packages . \
-    && pip install newrelic \
     && rm -Rf /tmp/*
 
 VOLUME /var/cache/zoneminder
