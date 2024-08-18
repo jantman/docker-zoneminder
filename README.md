@@ -27,3 +27,10 @@ In addition, the output of `mod_status` is exposed at `/server-status`.
 3. If the `docker-compose` command isn't already available on your system, [install docker-compose](https://docs.docker.com/compose/install/).
 4. In whichever docker-compose file you use (or both), change `ghcr.io/jantman/docker-zoneminder:latest` to the newest [versioned tag](https://github.com/jantman/docker-zoneminder/pkgs/container/docker-zoneminder) of the image.
 5. From that same directory, `docker-compose up` should start the database and then zoneminder. If you also want the MLAPI object detection, you can use `docker-compose -f docker-compose-mlapi.yml up`
+
+## Development
+
+1. Cut a branch and make some changes. Ideally build the Docker image locally to ensure it builds. Cut a PR. That will trigger a build, and will push the resulting image to Docker Hub with a tag of the commit SHA.
+2. Test that image.
+3. When the image is verified to work, merge the PR to `main`.
+4. Add a new release version tag for main and push it; that will trigger a full release build and release the new version.
