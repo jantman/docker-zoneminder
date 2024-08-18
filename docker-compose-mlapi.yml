@@ -17,7 +17,7 @@ services:
       - MYSQL_USER=zmuser
       - MARIADB_ROOT_PASSWORD=w8t67u23789t
   mlapi:
-    image: jantman/docker-zm-mlapi:devel
+    image: ghcr.io/jantman/docker-zm-mlapi:latest
     restart: always
     ports:
       - 8088:80
@@ -32,7 +32,7 @@ services:
       - ./mlapiconfig.ini:/etc/mlapiconfig.ini
       - ./secrets.ini:/etc/secrets.ini
   zm:
-    image: jantman/docker-zoneminder:devel
+    image: ghcr.io/jantman/docker-zoneminder:latest
     restart: always
     shm_size: 1G
     ports:

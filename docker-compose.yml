@@ -17,7 +17,7 @@ services:
       - MYSQL_USER=zmuser
       - MARIADB_ROOT_PASSWORD=w8t67u23789t
   zm:
-    image: jantman/docker-zoneminder:devel
+    image: ghcr.io/jantman/docker-zoneminder:latest
     restart: always
     shm_size: 1G
     ports:
