@@ -173,6 +173,8 @@ RUN apt-get update \
         liblwp-protocol-https-perl \
         # Shapely/GEOS for ZMES object detection hooks
         libgeos-dev \
+        # VAAPI hardware acceleration
+        intel-media-va-driver \
         # Shared libraries needed by ZM binaries
         libjpeg62-turbo \
         libpcre2-8-0 \

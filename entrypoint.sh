@@ -10,6 +10,11 @@ else
     rm -f /etc/mysql/mariadb.conf.d/99-skip-ssl.cnf
 fi
 
+# Ensure render group (GID 992) exists and www-data is a member, for VAAPI hardware acceleration
+echo "Setting up render group for VAAPI hardware acceleration"
+getent group render > /dev/null 2>&1 || groupadd -g 992 render
+id -nG www-data | grep -qw render || usermod -aG render www-data
+
 echo "Interpolating ZM_DB_* env vars into /etc/zm/zm.conf"
 sed  -i "s|ZM_DB_HOST=.*|ZM_DB_HOST=${ZM_DB_HOST}|" /etc/zm/zm.conf
 sed  -i "s|ZM_DB_NAME=.*|ZM_DB_NAME=${ZM_DB_NAME}|" /etc/zm/zm.conf
