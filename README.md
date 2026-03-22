@@ -103,7 +103,7 @@ The image includes [go2rtc](https://github.com/AlexxIT/go2rtc) v1.9.14 for moder
 
 ## Development
 
-1. Cut a branch and make some changes. Ideally build the Docker image locally to ensure it builds. Cut a PR. That will trigger a build, and will push the resulting image to Docker Hub with a tag of the commit SHA.
+1. Cut a branch and make some changes. Ideally build the Docker image locally to ensure it builds. Cut a PR. That will trigger a build, and will push the resulting image to GHCR as an untagged package.
 2. Test that image.
 3. When the image is verified to work, merge the PR to `main`.
-4. Add a new release version tag for main and push it; that will trigger a full release build and release the new version.
+4. Add a new release version tag for main and push it; that will trigger a full release build, push versioned and `latest` tags to GHCR, and create a GitHub Release with image info and changelog.

@@ -29,8 +29,8 @@ There is no automated test suite. Verification is manual: build the image and ru
 
 ## CI/CD
 
-- **Push to main / PR to main** (`build.yml`): Builds image, pushes to Docker Hub tagged with commit SHA.
-- **Git tag push** (`release.yml`): Builds and pushes to both Docker Hub and GHCR with version tag + `latest`, creates a GitHub Release.
+- **Push to main / PR to main** (`build.yml`): Builds image, pushes to GHCR as an untagged package.
+- **Git tag push** (`release.yml`): Builds and pushes to GHCR with version tag + `latest`, creates a GitHub Release with image info and changelog.
 - All GitHub Actions checks must pass before merging PRs.
 
 ## Architecture
