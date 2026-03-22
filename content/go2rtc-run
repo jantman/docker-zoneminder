@@ -2,7 +2,20 @@
 # ==============================================================================
 # go2rtc
 # Runs go2rtc streaming server for WebRTC/MSE/HLS live streaming
+#
+# Uses two config files per go2rtc's intended design
+# (see https://github.com/ZoneMinder/zoneminder/blob/fd8adee68cd2cdb746eb905da03ed24191f999a6/misc/zoneminder.gortc.service):
+#   1. /var/run/zm/go2rtc-streams.yaml - writable, for stream registrations
+#      (go2rtc's PatchConfig overwrites this when ZM registers streams via PUT /api/streams;
+#       see https://github.com/AlexxIT/go2rtc/blob/dc1685e9cf7a8c349181f20a1b4a44825ed394c5/internal/app/config.go)
+#   2. /etc/zm/go2rtc.yaml - read-only permanent settings (api, rtsp, webrtc)
+#      (listed second so its settings take precedence and are never overwritten)
 # ==============================================================================
 
 echo "Starting go2rtc..."
-exec /usr/local/bin/go2rtc -c /etc/zm/go2rtc.yaml
+
+# Ensure the writable streams config exists (go2rtc needs it on first start)
+mkdir -p /var/run/zm
+touch /var/run/zm/go2rtc-streams.yaml
+
+exec /usr/local/bin/go2rtc -c /var/run/zm/go2rtc-streams.yaml -c /etc/zm/go2rtc.yaml
