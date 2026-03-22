@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Docker image for ZoneMinder 1.38.0 (video surveillance) on Debian 13 (Trixie), using Apache + PHP 8.4. ZoneMinder is compiled from source in a multi-stage Docker build. Requires an external MySQL/MariaDB database (not bundled). Includes the ZM Event Notification Server (ZMES) for event-driven object detection via WebSocket on port 9000, and go2rtc for WebRTC/MSE/HLS live streaming. This is a personal WIP project (MIT license).
+Docker image for ZoneMinder 1.38.1 (video surveillance) on Debian 13 (Trixie), using Apache + PHP 8.4. ZoneMinder is compiled from source in a multi-stage Docker build. Requires an external MySQL/MariaDB database (not bundled). Includes the ZM Event Notification Server (ZMES) for event-driven object detection via WebSocket on port 9000, and go2rtc for WebRTC/MSE/HLS live streaming. This is a personal WIP project (MIT license).
 
 ## Build and Test
 
@@ -37,7 +37,7 @@ There is no automated test suite. Verification is manual: build the image and ru
 
 ### Container Internals
 
-- **Base:** Debian 13.3 (Trixie) with ZoneMinder 1.38.0 compiled from source
+- **Base:** Debian 13.4 (Trixie) with ZoneMinder 1.38.1 compiled from source
 - **Build:** Multi-stage Dockerfile — builder stage compiles ZM with cmake, runtime stage contains only what's needed to run
 - **Process supervision:** s6 (`s6-svscan`) manages multiple services:
   - `/etc/services.d/apache2/run` - Apache web server
