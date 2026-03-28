@@ -69,6 +69,8 @@ A detailed analysis of the changes from 1.36.33 to 1.38.0 can be seen in [docs/u
 - **Monitor Function changes:** ZM 1.38 splits the old single `Function` field into three separate fields: `Capturing`, `Analysing`, and `Recording`. Your existing monitors will be migrated automatically, but review them to ensure the new settings are correct.
 - **Live streaming:** Janus and RTSP2Web are no longer the recommended live stream methods. Use go2rtc instead (see below).
 - **ZMES compatibility:** The ZM Event Notification Server (v6.1.29) predates ZM 1.38 and may have issues with the new monitor function model. Test your event hooks carefully.
+- **Font file location:** ZM 1.38 moved the default font from `/usr/share/zoneminder/www/fonts/default.zmfnt` to `/usr/share/zoneminder/fonts/default.zmfnt`. If your logs are spammed with `Invalid font location` errors, go to **Options → Config → FONT_FILE_LOCATION** and update it to `/usr/share/zoneminder/fonts/default.zmfnt`.
+- **Zone Units:** ZM 1.38 may log warnings like `Zone X has Units=Percent but Coords contain pixel values`. This happens when zones created in older versions have `Units` set to `Percent` but their coordinates are actually pixel values. Fix with: `UPDATE Zones SET Units = 'Pixels' WHERE Units = 'Percent' AND Coords REGEXP '[0-9]{3,}';` then restart ZoneMinder.
 
 ### Known Issues
 
