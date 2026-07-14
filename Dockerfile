@@ -1,10 +1,10 @@
 # =============================================================================
-# Stage 1: Builder - Compile ZoneMinder 1.38.1 from source
+# Stage 1: Builder - Compile ZoneMinder 1.38.3 from source
 # =============================================================================
-FROM debian:13.4 AS builder
+FROM debian:13.6 AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG ZM_VERSION=1.38.1
+ARG ZM_VERSION=1.38.3
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         # Build tools
@@ -80,7 +80,7 @@ RUN cmake \
 # =============================================================================
 # Stage 2: Runtime
 # =============================================================================
-FROM debian:13.4
+FROM debian:13.6
 
 ENV ZM_DB_HOST=mariadb
 ENV ZM_DB_NAME=zm
