@@ -32,7 +32,7 @@ services:
       - ./cache:/var/cache/zoneminder
       - ./zm-log:/var/log/zm
       - ./apache2-log:/var/log/apache2
-      - ./es_rules.json:/etc/zm/es_rules.json
-      - ./secrets.ini:/etc/zm/secrets.ini
-      - ./zmeventnotification.ini:/etc/zm/zmeventnotification.ini
-      - ./objectconfig.ini:/etc/zm/objectconfig.ini
+      - ./es_rules.yml:/etc/zm/es_rules.yml
+      - ./secrets.yml:/etc/zm/secrets.yml
+      - ./zmeventnotification.yml:/etc/zm/zmeventnotification.yml
+      - ./objectconfig.yml:/etc/zm/objectconfig.yml

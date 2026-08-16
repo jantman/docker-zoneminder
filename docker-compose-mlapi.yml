@@ -14,6 +14,9 @@ services:
       - MYSQL_DATABASE=zm
       - MYSQL_USER=zmuser
       - MARIADB_ROOT_PASSWORD=w8t67u23789t
+  # NOTE: this is the ES 6-era inference container. It still reads INI config
+  # (mlapiconfig.ini, secrets.ini), which this repo no longer ships examples for, and it
+  # is superseded by a pyzm.serve gateway under ES 7. Kept here unchanged for reference.
   mlapi:
     image: ghcr.io/jantman/docker-zm-mlapi:latest
     restart: always
@@ -49,7 +52,7 @@ services:
       - ./cache:/var/cache/zoneminder
       - ./zm-log:/var/log/zm
       - ./apache2-log:/var/log/apache2
-      - ./es_rules.json:/etc/zm/es_rules.json
-      - ./secrets.ini:/etc/zm/secrets.ini
-      - ./zmeventnotification.ini:/etc/zm/zmeventnotification.ini
-      - ./objectconfig.ini:/etc/zm/objectconfig.ini
+      - ./es_rules.yml:/etc/zm/es_rules.yml
+      - ./secrets.yml:/etc/zm/secrets.yml
+      - ./zmeventnotification.yml:/etc/zm/zmeventnotification.yml
+      - ./objectconfig.yml:/etc/zm/objectconfig.yml

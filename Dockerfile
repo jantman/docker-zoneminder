@@ -1,10 +1,11 @@
 # =============================================================================
-# Stage 1: Builder - Compile ZoneMinder 1.38.3 from source
+# Stage 1: Builder - Compile ZoneMinder 1.38.4 from source
 # =============================================================================
 FROM debian:13.6 AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG ZM_VERSION=1.38.3
+ARG ZM_VERSION=1.38.4
+ARG ZMES_VERSION=v7.0.29
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         # Build tools
@@ -77,6 +78,13 @@ RUN cmake \
     && make -j$(nproc) \
     && make DESTDIR=/zminstall install
 
+# Fetch the ZM Event Notification Server (ES 7 / zmeventnotificationNg) at a pinned tag.
+# Done after the ZoneMinder build so bumping ZMES_VERSION does not invalidate the ZM
+# compile cache.
+RUN git clone --branch ${ZMES_VERSION} --depth 1 \
+        https://github.com/ZoneMinder/zmeventnotificationNg.git /src/zmeventnotification \
+    && rm -rf /src/zmeventnotification/.git
+
 # =============================================================================
 # Stage 2: Runtime
 # =============================================================================
@@ -92,6 +100,16 @@ ENV TZ=America/New_York
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG GO2RTC_VERSION=v1.9.14
+# pyzmNg publishes to PyPI under the name "pyzm"; the 2.x series is pyzmNg.
+# The [ml] extra brings shapely (zone polygons, required by pyzm.ml.filters), numpy,
+# Pillow, onnx and portalocker. Do NOT use [serve] or [full] - those pull inference
+# machinery (ultralytics, fastapi) that this container must not have; it does no
+# inference, and a local fallback would mask an outage of the pyzm.serve gateway.
+ARG PYZM_VERSION=2.5.1
+# ES 7 removed animation/GIF generation; the consuming hook re-implements it via
+# Event.extract_frames(), which needs imageio.
+ARG IMAGEIO_VERSION=2.37.4
+ARG NEWRELIC_VERSION=13.4.0
 
 # Install runtime dependencies
 RUN apt-get update \
@@ -164,10 +182,12 @@ RUN apt-get update \
         libio-interface-perl \
         libjson-maybexs-perl \
         liburi-encode-perl \
-        # ZMES-specific Perl modules
-        libconfig-inifiles-perl \
+        # ZMES-specific Perl modules (see upstream install.sh)
         libcrypt-mysql-perl \
+        libcrypt-openssl-rsa-perl \
+        libdbi-perl \
         libmodule-build-perl \
+        libyaml-libyaml-perl \
         libyaml-perl \
         libjson-perl \
         liblwp-protocol-https-perl \
@@ -197,8 +217,11 @@ RUN mkdir -p /etc/zm/conf.d \
     && chown -R www-data:www-data /var/cache/zoneminder /var/log/zm /var/lib/zoneminder /run/zm /tmp/zm \
     && chmod -R 770 /etc/zm /var/log/zm
 
-# Install pyzm and ZMES Perl dependency
-RUN pip install --break-system-packages pyzm \
+# Install pyzmNg and the one ZMES Perl dependency Debian does not package
+RUN pip install --break-system-packages \
+        "pyzm[ml]==${PYZM_VERSION}" \
+        "imageio==${IMAGEIO_VERSION}" \
+        "newrelic==${NEWRELIC_VERSION}" \
     && cpanm -i 'Net::WebSocket::Server'
 
 # Enable Apache modules
@@ -209,8 +232,9 @@ RUN wget -q -O /usr/local/bin/go2rtc \
         https://github.com/AlexxIT/go2rtc/releases/download/${GO2RTC_VERSION}/go2rtc_linux_amd64 \
     && chmod +x /usr/local/bin/go2rtc
 
-# Copy content files
+# Copy content files and the pinned ES 7 checkout from the builder stage
 COPY ./content/ /tmp/
+COPY --from=builder /src/zmeventnotification/ /tmp/zmeventnotification/
 
 # Install config files, s6 services, ZMES files
 RUN install -m 0644 -o root -g root /tmp/zm-site.conf /etc/apache2/sites-available/zm-site.conf \
@@ -229,15 +253,35 @@ RUN install -m 0644 -o root -g root /tmp/zm-site.conf /etc/apache2/sites-availab
     # ZMES directories and files
     && bash -c 'install -m 0755 -o www-data -g www-data -d /var/lib/zmeventnotification /var/lib/zmeventnotification/{bin,contrib,images,mlapi,known_faces,unknown_faces,misc,push}' \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/zmeventnotification.pl /usr/bin/zmeventnotification.pl \
+    # ES 7 split the event server into a ZmEventNotification::* Perl module tree that must
+    # be on @INC. Version.pm carries a hardcoded fallback that upstream's install.sh
+    # rewrites from the VERSION file; do the same so `zmeventnotification.pl --version`
+    # does not report 7.0.0.
+    && install -m 0755 -o root -g root -d /usr/share/perl5/ZmEventNotification \
+    && install -m 0644 -o root -g root /tmp/zmeventnotification/ZmEventNotification/*.pm /usr/share/perl5/ZmEventNotification/ \
+    && ES_VERSION="$(tr -d '[:space:]' < /tmp/zmeventnotification/VERSION)" \
+    && sed -i "s/FALLBACK_VERSION = '[^']*'/FALLBACK_VERSION = '${ES_VERSION}'/" \
+        /usr/share/perl5/ZmEventNotification/Version.pm \
+    && grep -q "FALLBACK_VERSION = '${ES_VERSION}'" /usr/share/perl5/ZmEventNotification/Version.pm \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/pushapi_plugins/pushapi_pushover.py /var/lib/zmeventnotification/bin/pushapi_pushover.py \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/hook/zm_event_start.sh /var/lib/zmeventnotification/bin/zm_event_start.sh \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/hook/zm_event_end.sh /var/lib/zmeventnotification/bin/zm_event_end.sh \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/hook/zm_detect.py /var/lib/zmeventnotification/bin/zm_detect.py \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/hook/zm_train_faces.py /var/lib/zmeventnotification/bin/zm_train_faces.py \
-    # Install ZMES hook helpers Python package and newrelic
-    && pip install --break-system-packages newrelic \
-    && cd /tmp/zmeventnotification/hook && pip -v install --break-system-packages . \
+    # Install the zmes_hook_helpers Python package (common_params, utils, push)
+    && cd /tmp/zmeventnotification/hook && pip install --break-system-packages . \
     && rm -Rf /tmp/*
+
+# Build-time smoke test. This repo has no test suite, so this is what stops a broken
+# dependency set from ever being pushed. The first three checks are the consumer's
+# verification block verbatim; the last two assert the CPU-only constraint.
+RUN python3 -c "import pyzm, shapely, newrelic, imageio, cv2, numpy; print('pyzm', pyzm.__version__)" \
+    && python3 -c "import zmes_hook_helpers.utils, zmes_hook_helpers.common_params, zmes_hook_helpers.push" \
+    && /var/lib/zmeventnotification/bin/zm_detect.py --bareversion \
+    && perl -MZmEventNotification::Version -e 'print "ES $ZmEventNotification::Version::VERSION\n"' \
+    && test -x /var/lib/zmeventnotification/bin/pushapi_pushover.py \
+    && python3 -c "import cv2, sys; sys.exit(0 if not hasattr(cv2, 'cuda') or cv2.cuda.getCudaEnabledDeviceCount() == 0 else 1)" \
+    && ! pip list 2>/dev/null | grep -iE '^(torch|ultralytics|onnxruntime-gpu|nvidia-|opencv-python)'
 
 VOLUME /var/cache/zoneminder
 VOLUME /var/log/zm
@@ -246,7 +290,9 @@ VOLUME /var/log/zm
 COPY entrypoint.sh /opt/
 RUN chmod +x /opt/entrypoint.sh
 
-ENTRYPOINT [ "/bin/bash", "-c", "source ~/.bashrc && /opt/entrypoint.sh ${@}", "--" ]
+# "$@" must be quoted: unquoted, bash re-splits each argument on whitespace, which mangles
+# any command containing spaces (e.g. python3 -c "import pyzm, cv2").
+ENTRYPOINT [ "/bin/bash", "-c", "source ~/.bashrc && exec /opt/entrypoint.sh \"$@\"", "--" ]
 
 EXPOSE 80
 EXPOSE 9000
