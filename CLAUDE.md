@@ -20,9 +20,9 @@ docker build -t docker-zoneminder:dev .
 docker-compose up
 ```
 
-**Run with MLAPI object detection:**
+**Run with GPU object detection (requires an NVIDIA GPU + Container Toolkit):**
 ```
-docker-compose -f docker-compose-mlapi.yml up
+docker-compose -f docker-compose-pyzm-serve.yml up
 ```
 
 ZoneMinder will be available at `http://localhost:8080` after startup.
@@ -72,7 +72,7 @@ There is no automated test suite. Verification is manual: build the image and ru
   - `content/go2rtc-run` - s6 service script for go2rtc
   - `content/go2rtc.yaml` - go2rtc configuration (API on :1984, WebRTC on :8555)
 - `docker-compose.yml` - Basic demo (ZM + MariaDB)
-- `docker-compose-mlapi.yml` - Extended demo with ML API service
+- `docker-compose-pyzm-serve.yml` - Extended demo adding the `docker-pyzm-serve` GPU inference gateway (`ghcr.io/jantman/docker-pyzm-serve`), which replaced the ES 6-era `docker-zm-mlapi`
 
 ### Configuration Files (Not Committed)
 

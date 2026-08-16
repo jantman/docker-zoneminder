@@ -1,0 +1,68 @@
+volumes:
+  data:
+  db:
+
+services:
+  mariadb:
+    image: mariadb:11.8
+    restart: always
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW --default-time-zone=America/New_York
+    volumes:
+      - ./db:/var/lib/mysql
+    environment:
+      - MYSQL_PASSWORD=zmpass
+      - MYSQL_DATABASE=zm
+      - MYSQL_USER=zmuser
+      - MARIADB_ROOT_PASSWORD=w8t67u23789t
+  # GPU inference gateway (pyzm.serve), replacing the ES 6-era zm-mlapi container.
+  #
+  # Requires on the host: an NVIDIA GPU of compute capability 6.1 or newer, a 550-branch
+  # or newer driver, and the NVIDIA Container Toolkit. Without the GPU reservation below
+  # the container exits 78 rather than silently serving CPU inference.
+  #
+  # No volumes, no config file: the image ships every model it serves. Everything is an
+  # environment variable; see https://github.com/jantman/docker-pyzm-serve
+  #
+  # To point ZoneMinder at it, uncomment ml_gateway in your objectconfig.yml:
+  #   ml_gateway: "http://pyzm-serve:5000"
+  #   ml_fallback_local: "no"
+  #
+  # Authentication is OFF by default -- this gateway answers any request that reaches its
+  # port. Fine on the isolated compose network here; set PYZM_SERVE_AUTH and friends if you
+  # expose port 5000 anywhere else.
+  pyzm-serve:
+    image: ghcr.io/jantman/docker-pyzm-serve:v0.1.0
+    restart: always
+    ports:
+      - 5000:5000
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+  zm:
+    image: ghcr.io/jantman/docker-zoneminder:latest
+    restart: always
+    shm_size: 1G
+    ports:
+      - 8080:80
+      - 9000:9000
+      - 1984:1984
+      - 8555:8555
+    depends_on:
+      - mariadb
+    tmpfs:
+      - /run
+      - /tmp
+    environment:
+      - LOG_DEBUG=true
+    volumes:
+      - ./cache:/var/cache/zoneminder
+      - ./zm-log:/var/log/zm
+      - ./apache2-log:/var/log/apache2
+      - ./es_rules.yml:/etc/zm/es_rules.yml
+      - ./secrets.yml:/etc/zm/secrets.yml
+      - ./zmeventnotification.yml:/etc/zm/zmeventnotification.yml
+      - ./objectconfig.yml:/etc/zm/objectconfig.yml

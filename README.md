@@ -29,7 +29,7 @@ In addition, the output of `mod_status` is exposed at `/server-status`.
 2. Remove the `EXAMPLE.` from the example file names, and edit the content of the files as needed. These are all documented elsewhere, and are all related to the ZM Event Notification server (ZMES) and object detection. If you don't care about ZMES and object detection, then these files can just be left as-is.
 3. If the `docker-compose` command isn't already available on your system, [install docker-compose](https://docs.docker.com/compose/install/).
 4. In whichever docker-compose file you use (or both), change `ghcr.io/jantman/docker-zoneminder:latest` to the newest [versioned tag](https://github.com/jantman/docker-zoneminder/pkgs/container/docker-zoneminder) of the image.
-5. From that same directory, `docker-compose up` should start the database and then zoneminder. If you also want the MLAPI object detection, you can use `docker-compose -f docker-compose-mlapi.yml up`
+5. From that same directory, `docker-compose up` should start the database and then zoneminder. If you also want GPU object detection, you can use `docker-compose -f docker-compose-pyzm-serve.yml up`, which adds a [docker-pyzm-serve](https://github.com/jantman/docker-pyzm-serve) inference gateway. That needs an NVIDIA GPU and the NVIDIA Container Toolkit on the host; see that repo for the requirements.
 
 ### Environment Variables
 

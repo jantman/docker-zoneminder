@@ -168,9 +168,13 @@ upstream 7.0.29: `secrets.EXAMPLE.yml`, `zmeventnotification.EXAMPLE.yml`,
   - `secrets.EXAMPLE.yml`, `zmeventnotification.EXAMPLE.yml`, `objectconfig.EXAMPLE.yml`,
     `es_rules.EXAMPLE.yml` taken from upstream 7.0.29; ES 6 INI/JSON examples deleted
   - `.gitignore`, `.dockerignore` and both docker-compose files updated
-  - The `mlapi` service in `docker-compose-mlapi.yml` is left alone but annotated: it is
-    the ES 6-era inference container, superseded by a pyzm.serve gateway, and it still
-    wants INI config this repo no longer ships examples for
+  - `docker-compose-mlapi.yml` renamed to `docker-compose-pyzm-serve.yml`, and its `mlapi`
+    service (`docker-zm-mlapi`, the ES 6-era inference container that still wants INI
+    config) replaced with `pyzm-serve` running
+    [`ghcr.io/jantman/docker-pyzm-serve:v0.1.0`](https://github.com/jantman/docker-pyzm-serve)
+    on port 5000 with an NVIDIA GPU reservation. That image ships its own models and needs
+    no volumes or config file, so all four of the old service's mounts are gone. The
+    filename was changed because nothing named "mlapi" remained in it.
 - [x] Milestone 5: Acceptance Criteria
   - Fixed `entrypoint.sh` / `ENTRYPOINT` so a passed command runs instead of being ignored
     (see "Contract deviations" above)
