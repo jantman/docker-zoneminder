@@ -5,7 +5,22 @@ FROM debian:13.6 AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG ZM_VERSION=1.38.4
-ARG ZMES_VERSION=v7.0.29
+# zmeventnotificationNg. Normally a release tag of ZoneMinder/zmeventnotificationNg;
+# repo and ref are both ARGs so a fork can be tested without editing the clone below.
+#
+# ###########################################################################
+# # TEMPORARY -- NOT RELEASABLE. This points at a FORK, not upstream:       #
+# #   jantman/zmeventnotificationNg @ issues/48, which is                   #
+# #   ZoneMinder/zmeventnotificationNg#49 under review. It restores the ES 6 #
+# #   join of config zone patterns onto ZM-imported zone geometry by name,   #
+# #   which is what lets objectconfig.yml drop every hardcoded `coords:`     #
+# #   line and set import_zm_zones: "yes".                                   #
+# #                                                                         #
+# # Both lines MUST go back to ZoneMinder/zmeventnotificationNg at a release #
+# # tag before any tag is cut here: the SHA is immutable but the fork is not.#
+# ###########################################################################
+ARG ZMES_REPO=https://github.com/jantman/zmeventnotificationNg.git
+ARG ZMES_REF=50beae7d5f36f1d45a4b5505180e76685da9fc52
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         # Build tools
@@ -78,12 +93,26 @@ RUN cmake \
     && make -j$(nproc) \
     && make DESTDIR=/zminstall install
 
-# Fetch the ZM Event Notification Server (ES 7 / zmeventnotificationNg) at a pinned tag.
-# Done after the ZoneMinder build so bumping ZMES_VERSION does not invalidate the ZM
+# Fetch the ZM Event Notification Server (ES 7 / zmeventnotificationNg) at a pinned ref.
+# Done after the ZoneMinder build so bumping ZMES_REF does not invalidate the ZM
 # compile cache.
-RUN git clone --branch ${ZMES_VERSION} --depth 1 \
-        https://github.com/ZoneMinder/zmeventnotificationNg.git /src/zmeventnotification \
-    && rm -rf /src/zmeventnotification/.git
+#
+# init + fetch rather than `clone --branch`, because --branch takes a ref NAME and this
+# pins a commit SHA. Shallow-fetching one SHA keeps the clone as cheap as --depth 1 was;
+# GitHub serves reachable SHAs to a want request.
+RUN mkdir -p /src/zmeventnotification \
+    && cd /src/zmeventnotification \
+    && git init -q \
+    && git remote add origin ${ZMES_REPO} \
+    && git fetch -q --depth 1 origin ${ZMES_REF} \
+    && git checkout -q FETCH_HEAD \
+    && rm -rf /src/zmeventnotification/.git \
+    # Prove the fork actually landed. ZMES carries no version string that would
+    # distinguish issues/48 from the v7.0.29 tag, so without this a silently wrong
+    # ref would ship an image whose only symptom is zone patterns quietly not
+    # joining -- the exact failure mode of T094, which nothing signalled for a day.
+    && grep -q "def normalize_zone_name" \
+        /src/zmeventnotification/hook/zmes_hook_helpers/utils.py
 
 # =============================================================================
 # Stage 2: Runtime
@@ -105,7 +134,25 @@ ARG GO2RTC_VERSION=v1.9.14
 # Pillow, onnx and portalocker. Do NOT use [serve] or [full] - those pull inference
 # machinery (ultralytics, fastapi) that this container must not have; it does no
 # inference, and a local fallback would mask an outage of the pyzm.serve gateway.
-ARG PYZM_VERSION=2.5.1
+#
+# ###########################################################################
+# # TEMPORARY -- NOT RELEASABLE. Normally "pyzm[ml]==<version>" from PyPI.  #
+# # This installs from a FORK instead:                                      #
+# #   jantman/pyzmNg @ integration/66-68, a merge of two open PRs:          #
+# #     ZoneMinder/pyzmNg#69 (issues/68) -- zone_match_strategy. THIS is    #
+# #       what this image needs. Zone filtering runs HERE, client-side, in  #
+# #       pyzm.ml.filters via the hook -- not in the pyzm.serve gateway,    #
+# #       whose /infer takes flat form fields and never sees a             #
+# #       DetectorConfig. objectconfig.yml sets first_intersecting to       #
+# #       restore ES 6 zone resolution.                                     #
+# #     ZoneMinder/pyzmNg#67 (issues/66) -- GPU-fallback retry and the      #
+# #       `processor` key on /models. Gateway-side; carried along only so   #
+# #       this image and docker-pyzm-serve run one identical pyzm build.    #
+# #                                                                        #
+# # Restore the PyPI pin once both PRs are released upstream.               #
+# ###########################################################################
+ARG PYZM_REPO=https://github.com/jantman/pyzmNg.git
+ARG PYZM_REF=271bf98c33c28edca231c0f617d79887acd3a001
 # ES 7 removed animation/GIF generation; the consuming hook re-implements it via
 # Event.extract_frames(), which needs imageio.
 ARG IMAGEIO_VERSION=2.37.4
@@ -219,10 +266,16 @@ RUN mkdir -p /etc/zm/conf.d \
 
 # Install pyzmNg and the one ZMES Perl dependency Debian does not package
 RUN pip install --break-system-packages \
-        "pyzm[ml]==${PYZM_VERSION}" \
+        "pyzm[ml] @ git+${PYZM_REPO}@${PYZM_REF}" \
         "imageio==${IMAGEIO_VERSION}" \
         "newrelic==${NEWRELIC_VERSION}" \
-    && cpanm -i 'Net::WebSocket::Server'
+    && cpanm -i 'Net::WebSocket::Server' \
+    # Prove the pyzm fork landed. integration/66-68 does NOT bump the version, so
+    # pip reports 2.5.1 either way and a fallback to the PyPI release would be
+    # invisible -- including to the `pyzm:{}` version the hook logs at startup.
+    # ZoneMatchStrategy exists only on ZoneMinder/pyzmNg#69.
+    && python3 -c "from pyzm.models.config import ZoneMatchStrategy; \
+assert ZoneMatchStrategy.FIRST_INTERSECTING.value == 'first_intersecting'" 
 
 # Enable Apache modules
 RUN a2enmod rewrite && a2enmod cgi && a2enmod headers && a2enmod expires

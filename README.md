@@ -79,7 +79,7 @@ A detailed analysis of the changes from 1.36.33 to 1.38.0 can be seen in [docs/u
 
 ## Upgrading the Event Server from 6.x to 7.x
 
-Images up to and including `1.38.3-jantman1` shipped [zmeventnotification](https://github.com/ZoneMinder/zmeventnotification) 6.1.29 and the `pyzm` Python library, both of which are archived upstream. Newer images ship [zmeventnotificationNg](https://github.com/ZoneMinder/zmeventnotificationNg) 7.0.29 and [pyzmNg](https://github.com/ZoneMinder/pyzmNg) 2.5.1 (published to PyPI as `pyzm`).
+Images up to and including `1.38.3-jantman1` shipped [zmeventnotification](https://github.com/ZoneMinder/zmeventnotification) 6.1.29 and the `pyzm` Python library, both of which are archived upstream. Newer images ship [zmeventnotificationNg](https://github.com/ZoneMinder/zmeventnotificationNg) 7.0.29 and [pyzmNg](https://github.com/ZoneMinder/pyzmNg) 2.5.1 (published to PyPI as `pyzm`). Images built from this branch ship *forks* of both, pinned by SHA, carrying open PRs — see CLAUDE.md.
 
 This is a breaking change for your configuration; the image itself ships no config, so nothing migrates automatically.
 
