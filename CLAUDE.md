@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Docker image for ZoneMinder 1.38.4 (video surveillance) on Debian 13 (Trixie), using Apache + PHP 8.4. ZoneMinder is compiled from source in a multi-stage Docker build. Requires an external MySQL/MariaDB database (not bundled). Includes the ZM Event Notification Server (ZMES) — zmeventnotificationNg 7.0.29 with pyzmNg 2.5.1 — for event-driven object detection via WebSocket on port 9000, and go2rtc for WebRTC/MSE/HLS live streaming. This is a personal WIP project (MIT license).
 
-**This branch ships forks, not upstream releases.** Both are pinned by SHA in the
-Dockerfile and both are temporary — restore the upstream tag / PyPI pin once the PRs are
-released:
+**This image ships forks, not upstream releases**, and is released that way on purpose —
+waiting on upstream would have blocked a release of work already soaked on live traffic.
+Releases built this way carry a `-fork` version suffix. Both pins are by SHA:
 
 | Component | Pinned to | PR |
 |---|---|---|
@@ -16,7 +16,15 @@ released:
 | pyzmNg | `jantman/pyzmNg` @ `integration/66-68` | [#69](https://github.com/ZoneMinder/pyzmNg/pull/69) `zone_match_strategy` (used here) + [#67](https://github.com/ZoneMinder/pyzmNg/pull/67) GPU fallback (gateway-side, carried for parity) |
 
 Neither fork bumps a version string, so the build asserts a marker symbol from each
-(`normalize_zone_name`, `ZoneMatchStrategy`) rather than trusting the pin.
+(`normalize_zone_name`, `ZoneMatchStrategy`) rather than trusting the pin. Keep those
+assertions for as long as the pins are forks — they are the only thing that would catch a
+silently wrong ref, whose sole symptom is zone patterns quietly not applying.
+
+Both forks carry an annotated tag on the pinned commit — `image-pin-pr49` and
+`image-pin-pr67-pr69` — because the PR branches will be deleted once the PRs merge, and an
+unreachable commit means this image can no longer be rebuilt. **Do not delete those tags
+while a released image pins them.** Restore the upstream tag / PyPI pin and drop the `-fork`
+suffix once the PRs are released.
 
 The image is deliberately **CPU-only**: no CUDA, no GPU libraries, no CUDA-enabled OpenCV. It performs no inference; a separate remote gateway does. Keeping GPU libraries out prevents an accidental local-inference fallback from masking a gateway outage. `pyzm` is installed with the `[ml]` extra only — never `[serve]` or `[full]`, which pull ultralytics/fastapi.
 

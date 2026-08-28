@@ -9,15 +9,23 @@ ARG ZM_VERSION=1.38.4
 # repo and ref are both ARGs so a fork can be tested without editing the clone below.
 #
 # ###########################################################################
-# # TEMPORARY -- NOT RELEASABLE. This points at a FORK, not upstream:       #
-# #   jantman/zmeventnotificationNg @ issues/48, which is                   #
-# #   ZoneMinder/zmeventnotificationNg#49 under review. It restores the ES 6 #
-# #   join of config zone patterns onto ZM-imported zone geometry by name,   #
-# #   which is what lets objectconfig.yml drop every hardcoded `coords:`     #
-# #   line and set import_zm_zones: "yes".                                   #
+# # RELEASED AGAINST A FORK, DELIBERATELY. This points at                   #
+# # jantman/zmeventnotificationNg @ issues/48, which is                     #
+# # ZoneMinder/zmeventnotificationNg#49 -- Ready for review, not yet merged #
+# # upstream. It restores the ES 6 join of config zone patterns onto        #
+# # ZM-imported zone geometry by name, which is what lets objectconfig.yml  #
+# # drop every hardcoded `coords:` line and set import_zm_zones: "yes".     #
 # #                                                                         #
-# # Both lines MUST go back to ZoneMinder/zmeventnotificationNg at a release #
-# # tag before any tag is cut here: the SHA is immutable but the fork is not.#
+# # The SHA cannot move, but the commit would become UNREACHABLE once       #
+# # issues/48 is deleted after merging, and the fetch below would fail. So  #
+# # jantman/zmeventnotificationNg carries the annotated tag                 #
+# # `image-pin-pr49` on this exact commit: a tag is a ref, so the commit    #
+# # survives its branch. Do not delete that tag while any released image    #
+# # pins this SHA.                                                          #
+# #                                                                         #
+# # Releases built this way carry the `-fork` version suffix. Repin to      #
+# # ZoneMinder/zmeventnotificationNg at a release tag once #49 lands, and   #
+# # drop the suffix.                                                        #
 # ###########################################################################
 ARG ZMES_REPO=https://github.com/jantman/zmeventnotificationNg.git
 ARG ZMES_REF=50beae7d5f36f1d45a4b5505180e76685da9fc52
@@ -136,8 +144,8 @@ ARG GO2RTC_VERSION=v1.9.14
 # inference, and a local fallback would mask an outage of the pyzm.serve gateway.
 #
 # ###########################################################################
-# # TEMPORARY -- NOT RELEASABLE. Normally "pyzm[ml]==<version>" from PyPI.  #
-# # This installs from a FORK instead:                                      #
+# # RELEASED AGAINST A FORK, DELIBERATELY. Normally "pyzm[ml]==<version>"   #
+# # from PyPI. This installs from a fork instead:                           #
 # #   jantman/pyzmNg @ integration/66-68, a merge of two open PRs:          #
 # #     ZoneMinder/pyzmNg#69 (issues/68) -- zone_match_strategy. THIS is    #
 # #       what this image needs. Zone filtering runs HERE, client-side, in  #
@@ -149,7 +157,14 @@ ARG GO2RTC_VERSION=v1.9.14
 # #       `processor` key on /models. Gateway-side; carried along only so   #
 # #       this image and docker-pyzm-serve run one identical pyzm build.    #
 # #                                                                        #
-# # Restore the PyPI pin once both PRs are released upstream.               #
+# # The SHA cannot move, but the commit would become UNREACHABLE once the   #
+# # PR branches are deleted after merging, and pip could no longer fetch    #
+# # it. jantman/pyzmNg carries the annotated tag `image-pin-pr67-pr69` on   #
+# # this exact commit so it survives its branch; do not delete that tag     #
+# # while any released image pins this SHA.                                 #
+# #                                                                        #
+# # Restore the PyPI pin once both PRs are released upstream, and drop the  #
+# # `-fork` suffix from this image's version.                               #
 # ###########################################################################
 ARG PYZM_REPO=https://github.com/jantman/pyzmNg.git
 ARG PYZM_REF=271bf98c33c28edca231c0f617d79887acd3a001
