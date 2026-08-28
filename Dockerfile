@@ -1,10 +1,34 @@
 # =============================================================================
-# Stage 1: Builder - Compile ZoneMinder 1.38.3 from source
+# Stage 1: Builder - Compile ZoneMinder 1.38.4 from source
 # =============================================================================
 FROM debian:13.6 AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG ZM_VERSION=1.38.3
+ARG ZM_VERSION=1.38.4
+# zmeventnotificationNg. Normally a release tag of ZoneMinder/zmeventnotificationNg;
+# repo and ref are both ARGs so a fork can be tested without editing the clone below.
+#
+# ###########################################################################
+# # RELEASED AGAINST A FORK, DELIBERATELY. This points at                   #
+# # jantman/zmeventnotificationNg @ issues/48, which is                     #
+# # ZoneMinder/zmeventnotificationNg#49 -- Ready for review, not yet merged #
+# # upstream. It restores the ES 6 join of config zone patterns onto        #
+# # ZM-imported zone geometry by name, which is what lets objectconfig.yml  #
+# # drop every hardcoded `coords:` line and set import_zm_zones: "yes".     #
+# #                                                                         #
+# # The SHA cannot move, but the commit would become UNREACHABLE once       #
+# # issues/48 is deleted after merging, and the fetch below would fail. So  #
+# # jantman/zmeventnotificationNg carries the annotated tag                 #
+# # `image-pin-pr49` on this exact commit: a tag is a ref, so the commit    #
+# # survives its branch. Do not delete that tag while any released image    #
+# # pins this SHA.                                                          #
+# #                                                                         #
+# # Releases built this way carry the `-fork` version suffix. Repin to      #
+# # ZoneMinder/zmeventnotificationNg at a release tag once #49 lands, and   #
+# # drop the suffix.                                                        #
+# ###########################################################################
+ARG ZMES_REPO=https://github.com/jantman/zmeventnotificationNg.git
+ARG ZMES_REF=50beae7d5f36f1d45a4b5505180e76685da9fc52
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         # Build tools
@@ -77,6 +101,27 @@ RUN cmake \
     && make -j$(nproc) \
     && make DESTDIR=/zminstall install
 
+# Fetch the ZM Event Notification Server (ES 7 / zmeventnotificationNg) at a pinned ref.
+# Done after the ZoneMinder build so bumping ZMES_REF does not invalidate the ZM
+# compile cache.
+#
+# init + fetch rather than `clone --branch`, because --branch takes a ref NAME and this
+# pins a commit SHA. Shallow-fetching one SHA keeps the clone as cheap as --depth 1 was;
+# GitHub serves reachable SHAs to a want request.
+RUN mkdir -p /src/zmeventnotification \
+    && cd /src/zmeventnotification \
+    && git init -q \
+    && git remote add origin ${ZMES_REPO} \
+    && git fetch -q --depth 1 origin ${ZMES_REF} \
+    && git checkout -q FETCH_HEAD \
+    && rm -rf /src/zmeventnotification/.git \
+    # Prove the fork actually landed. ZMES carries no version string that would
+    # distinguish issues/48 from the v7.0.29 tag, so without this a silently wrong
+    # ref would ship an image whose only symptom is zone patterns quietly not
+    # joining -- the exact failure mode of T094, which nothing signalled for a day.
+    && grep -q "def normalize_zone_name" \
+        /src/zmeventnotification/hook/zmes_hook_helpers/utils.py
+
 # =============================================================================
 # Stage 2: Runtime
 # =============================================================================
@@ -92,6 +137,41 @@ ENV TZ=America/New_York
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG GO2RTC_VERSION=v1.9.14
+# pyzmNg publishes to PyPI under the name "pyzm"; the 2.x series is pyzmNg.
+# The [ml] extra brings shapely (zone polygons, required by pyzm.ml.filters), numpy,
+# Pillow, onnx and portalocker. Do NOT use [serve] or [full] - those pull inference
+# machinery (ultralytics, fastapi) that this container must not have; it does no
+# inference, and a local fallback would mask an outage of the pyzm.serve gateway.
+#
+# ###########################################################################
+# # RELEASED AGAINST A FORK, DELIBERATELY. Normally "pyzm[ml]==<version>"   #
+# # from PyPI. This installs from a fork instead:                           #
+# #   jantman/pyzmNg @ integration/66-68, a merge of two open PRs:          #
+# #     ZoneMinder/pyzmNg#69 (issues/68) -- zone_match_strategy. THIS is    #
+# #       what this image needs. Zone filtering runs HERE, client-side, in  #
+# #       pyzm.ml.filters via the hook -- not in the pyzm.serve gateway,    #
+# #       whose /infer takes flat form fields and never sees a             #
+# #       DetectorConfig. objectconfig.yml sets first_intersecting to       #
+# #       restore ES 6 zone resolution.                                     #
+# #     ZoneMinder/pyzmNg#67 (issues/66) -- GPU-fallback retry and the      #
+# #       `processor` key on /models. Gateway-side; carried along only so   #
+# #       this image and docker-pyzm-serve run one identical pyzm build.    #
+# #                                                                        #
+# # The SHA cannot move, but the commit would become UNREACHABLE once the   #
+# # PR branches are deleted after merging, and pip could no longer fetch    #
+# # it. jantman/pyzmNg carries the annotated tag `image-pin-pr67-pr69` on   #
+# # this exact commit so it survives its branch; do not delete that tag     #
+# # while any released image pins this SHA.                                 #
+# #                                                                        #
+# # Restore the PyPI pin once both PRs are released upstream, and drop the  #
+# # `-fork` suffix from this image's version.                               #
+# ###########################################################################
+ARG PYZM_REPO=https://github.com/jantman/pyzmNg.git
+ARG PYZM_REF=271bf98c33c28edca231c0f617d79887acd3a001
+# ES 7 removed animation/GIF generation; the consuming hook re-implements it via
+# Event.extract_frames(), which needs imageio.
+ARG IMAGEIO_VERSION=2.37.4
+ARG NEWRELIC_VERSION=13.4.0
 
 # Install runtime dependencies
 RUN apt-get update \
@@ -164,10 +244,12 @@ RUN apt-get update \
         libio-interface-perl \
         libjson-maybexs-perl \
         liburi-encode-perl \
-        # ZMES-specific Perl modules
-        libconfig-inifiles-perl \
+        # ZMES-specific Perl modules (see upstream install.sh)
         libcrypt-mysql-perl \
+        libcrypt-openssl-rsa-perl \
+        libdbi-perl \
         libmodule-build-perl \
+        libyaml-libyaml-perl \
         libyaml-perl \
         libjson-perl \
         liblwp-protocol-https-perl \
@@ -197,9 +279,18 @@ RUN mkdir -p /etc/zm/conf.d \
     && chown -R www-data:www-data /var/cache/zoneminder /var/log/zm /var/lib/zoneminder /run/zm /tmp/zm \
     && chmod -R 770 /etc/zm /var/log/zm
 
-# Install pyzm and ZMES Perl dependency
-RUN pip install --break-system-packages pyzm \
-    && cpanm -i 'Net::WebSocket::Server'
+# Install pyzmNg and the one ZMES Perl dependency Debian does not package
+RUN pip install --break-system-packages \
+        "pyzm[ml] @ git+${PYZM_REPO}@${PYZM_REF}" \
+        "imageio==${IMAGEIO_VERSION}" \
+        "newrelic==${NEWRELIC_VERSION}" \
+    && cpanm -i 'Net::WebSocket::Server' \
+    # Prove the pyzm fork landed. integration/66-68 does NOT bump the version, so
+    # pip reports 2.5.1 either way and a fallback to the PyPI release would be
+    # invisible -- including to the `pyzm:{}` version the hook logs at startup.
+    # ZoneMatchStrategy exists only on ZoneMinder/pyzmNg#69.
+    && python3 -c "from pyzm.models.config import ZoneMatchStrategy; \
+assert ZoneMatchStrategy.FIRST_INTERSECTING.value == 'first_intersecting'" 
 
 # Enable Apache modules
 RUN a2enmod rewrite && a2enmod cgi && a2enmod headers && a2enmod expires
@@ -209,8 +300,9 @@ RUN wget -q -O /usr/local/bin/go2rtc \
         https://github.com/AlexxIT/go2rtc/releases/download/${GO2RTC_VERSION}/go2rtc_linux_amd64 \
     && chmod +x /usr/local/bin/go2rtc
 
-# Copy content files
+# Copy content files and the pinned ES 7 checkout from the builder stage
 COPY ./content/ /tmp/
+COPY --from=builder /src/zmeventnotification/ /tmp/zmeventnotification/
 
 # Install config files, s6 services, ZMES files
 RUN install -m 0644 -o root -g root /tmp/zm-site.conf /etc/apache2/sites-available/zm-site.conf \
@@ -229,15 +321,35 @@ RUN install -m 0644 -o root -g root /tmp/zm-site.conf /etc/apache2/sites-availab
     # ZMES directories and files
     && bash -c 'install -m 0755 -o www-data -g www-data -d /var/lib/zmeventnotification /var/lib/zmeventnotification/{bin,contrib,images,mlapi,known_faces,unknown_faces,misc,push}' \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/zmeventnotification.pl /usr/bin/zmeventnotification.pl \
+    # ES 7 split the event server into a ZmEventNotification::* Perl module tree that must
+    # be on @INC. Version.pm carries a hardcoded fallback that upstream's install.sh
+    # rewrites from the VERSION file; do the same so `zmeventnotification.pl --version`
+    # does not report 7.0.0.
+    && install -m 0755 -o root -g root -d /usr/share/perl5/ZmEventNotification \
+    && install -m 0644 -o root -g root /tmp/zmeventnotification/ZmEventNotification/*.pm /usr/share/perl5/ZmEventNotification/ \
+    && ES_VERSION="$(tr -d '[:space:]' < /tmp/zmeventnotification/VERSION)" \
+    && sed -i "s/FALLBACK_VERSION = '[^']*'/FALLBACK_VERSION = '${ES_VERSION}'/" \
+        /usr/share/perl5/ZmEventNotification/Version.pm \
+    && grep -q "FALLBACK_VERSION = '${ES_VERSION}'" /usr/share/perl5/ZmEventNotification/Version.pm \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/pushapi_plugins/pushapi_pushover.py /var/lib/zmeventnotification/bin/pushapi_pushover.py \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/hook/zm_event_start.sh /var/lib/zmeventnotification/bin/zm_event_start.sh \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/hook/zm_event_end.sh /var/lib/zmeventnotification/bin/zm_event_end.sh \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/hook/zm_detect.py /var/lib/zmeventnotification/bin/zm_detect.py \
     && install -m 0755 -o www-data -g www-data /tmp/zmeventnotification/hook/zm_train_faces.py /var/lib/zmeventnotification/bin/zm_train_faces.py \
-    # Install ZMES hook helpers Python package and newrelic
-    && pip install --break-system-packages newrelic \
-    && cd /tmp/zmeventnotification/hook && pip -v install --break-system-packages . \
+    # Install the zmes_hook_helpers Python package (common_params, utils, push)
+    && cd /tmp/zmeventnotification/hook && pip install --break-system-packages . \
     && rm -Rf /tmp/*
+
+# Build-time smoke test. This repo has no test suite, so this is what stops a broken
+# dependency set from ever being pushed. The first three checks are the consumer's
+# verification block verbatim; the last two assert the CPU-only constraint.
+RUN python3 -c "import pyzm, shapely, newrelic, imageio, cv2, numpy; print('pyzm', pyzm.__version__)" \
+    && python3 -c "import zmes_hook_helpers.utils, zmes_hook_helpers.common_params, zmes_hook_helpers.push" \
+    && /var/lib/zmeventnotification/bin/zm_detect.py --bareversion \
+    && perl -MZmEventNotification::Version -e 'print "ES $ZmEventNotification::Version::VERSION\n"' \
+    && test -x /var/lib/zmeventnotification/bin/pushapi_pushover.py \
+    && python3 -c "import cv2, sys; sys.exit(0 if not hasattr(cv2, 'cuda') or cv2.cuda.getCudaEnabledDeviceCount() == 0 else 1)" \
+    && ! pip list 2>/dev/null | grep -iE '^(torch|ultralytics|onnxruntime-gpu|nvidia-|opencv-python)'
 
 VOLUME /var/cache/zoneminder
 VOLUME /var/log/zm
@@ -246,7 +358,9 @@ VOLUME /var/log/zm
 COPY entrypoint.sh /opt/
 RUN chmod +x /opt/entrypoint.sh
 
-ENTRYPOINT [ "/bin/bash", "-c", "source ~/.bashrc && /opt/entrypoint.sh ${@}", "--" ]
+# "$@" must be quoted: unquoted, bash re-splits each argument on whitespace, which mangles
+# any command containing spaces (e.g. python3 -c "import pyzm, cv2").
+ENTRYPOINT [ "/bin/bash", "-c", "source ~/.bashrc && exec /opt/entrypoint.sh \"$@\"", "--" ]
 
 EXPOSE 80
 EXPOSE 9000

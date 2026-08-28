@@ -2,6 +2,15 @@
 
 set -o errexit
 
+# If a command was passed, run that instead of starting ZoneMinder. Without this, args are
+# silently ignored and every `docker run <tag> <cmd>` blocks forever on the MariaDB ping
+# loop below, which makes the image impossible to smoke-test without a database:
+#   docker run --rm <tag> python3 -c "import pyzm; print(pyzm.__version__)"
+#   docker run --rm <tag> /var/lib/zmeventnotification/bin/zm_detect.py --bareversion
+if [[ $# -gt 0 ]]; then
+    exec "$@"
+fi
+
 # Configure MariaDB client SSL globally so all callers (including zmupdate.pl) respect it
 if [[ "${ZM_DB_SSL}" != "yes" ]]; then
     echo "ZM_DB_SSL is not 'yes'; configuring --skip-ssl globally for MariaDB client"

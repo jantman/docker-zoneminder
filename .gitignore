@@ -2,6 +2,12 @@ cache/
 zm-log/
 db/
 apache2-log/
+# ES 7 configuration (copy from the *.EXAMPLE.yml files)
+es_rules.yml
+secrets.yml
+zmeventnotification.yml
+objectconfig.yml
+# Legacy ES 6 configuration, kept ignored so leftovers are never committed
 es_rules.json
 secrets.ini
 zmeventnotification.ini

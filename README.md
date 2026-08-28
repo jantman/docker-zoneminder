@@ -6,9 +6,9 @@ Modern, best-practices Debian-based Zoneminder container
 
 **IMPORTANT:** This is a personal project only. PRs are accepted, but this is not supported and "issues" will likely not be fixed or responded to. This is only for people who understand the details of everything invovled, sorry.
 
-This repo attempts to provide a modern, best-practices Docker image for current ZoneMinder versions, using a current Debian version base. The image provides ZoneMinder 1.38.3 (compiled from source) on Debian 13 (Trixie) with Apache + PHP 8.4, and includes [go2rtc](https://github.com/AlexxIT/go2rtc) for WebRTC/MSE/HLS live streaming. It requires an external MySQL/MariaDB server (the example docker-compose files use MariaDB 11.8 LTS). The image is vehemently NOT auto-updating, as doing so in a Docker image is a mortal sin. If you want to update, then pull a newer tag.
+This repo attempts to provide a modern, best-practices Docker image for current ZoneMinder versions, using a current Debian version base. The image provides ZoneMinder 1.38.4 (compiled from source) on Debian 13 (Trixie) with Apache + PHP 8.4, and includes [go2rtc](https://github.com/AlexxIT/go2rtc) for WebRTC/MSE/HLS live streaming. It requires an external MySQL/MariaDB server (the example docker-compose files use MariaDB 11.8 LTS). The image is vehemently NOT auto-updating, as doing so in a Docker image is a mortal sin. If you want to update, then pull a newer tag.
 
-**NOTE:** If you want to use the event server, then you'll need to mount the appropriate configuration files in to the image at ``/etc/zm/es_rules.json``, ``/etc/zm/zmeventnotification.ini``, and ``/etc/zm/secrets.ini``; examples are included in this repo.
+**NOTE:** If you want to use the event server, then you'll need to mount the appropriate configuration files in to the image at ``/etc/zm/es_rules.yml``, ``/etc/zm/zmeventnotification.yml``, ``/etc/zm/objectconfig.yml``, and ``/etc/zm/secrets.yml``; examples are included in this repo. These are YAML as of ES 7 — see [Upgrading the Event Server from 6.x to 7.x](#upgrading-the-event-server-from-6x-to-7x) if you are coming from an older image.
 
 In addition, the output of `mod_status` is exposed at `/server-status`.
 
@@ -29,7 +29,7 @@ In addition, the output of `mod_status` is exposed at `/server-status`.
 2. Remove the `EXAMPLE.` from the example file names, and edit the content of the files as needed. These are all documented elsewhere, and are all related to the ZM Event Notification server (ZMES) and object detection. If you don't care about ZMES and object detection, then these files can just be left as-is.
 3. If the `docker-compose` command isn't already available on your system, [install docker-compose](https://docs.docker.com/compose/install/).
 4. In whichever docker-compose file you use (or both), change `ghcr.io/jantman/docker-zoneminder:latest` to the newest [versioned tag](https://github.com/jantman/docker-zoneminder/pkgs/container/docker-zoneminder) of the image.
-5. From that same directory, `docker-compose up` should start the database and then zoneminder. If you also want the MLAPI object detection, you can use `docker-compose -f docker-compose-mlapi.yml up`
+5. From that same directory, `docker-compose up` should start the database and then zoneminder. If you also want GPU object detection, you can use `docker-compose -f docker-compose-pyzm-serve.yml up`, which adds a [docker-pyzm-serve](https://github.com/jantman/docker-pyzm-serve) inference gateway. That needs an NVIDIA GPU and the NVIDIA Container Toolkit on the host; see that repo for the requirements.
 
 ### Environment Variables
 
@@ -68,7 +68,7 @@ A detailed analysis of the changes from 1.36.33 to 1.38.0 can be seen in [docs/u
 
 - **Monitor Function changes:** ZM 1.38 splits the old single `Function` field into three separate fields: `Capturing`, `Analysing`, and `Recording`. Your existing monitors will be migrated automatically, but review them to ensure the new settings are correct.
 - **Live streaming:** Janus and RTSP2Web are no longer the recommended live stream methods. Use go2rtc instead (see below).
-- **ZMES compatibility:** The ZM Event Notification Server (v6.1.29) predates ZM 1.38 and may have issues with the new monitor function model. Test your event hooks carefully.
+- **ZMES compatibility:** The image now ships Event Server 7.x, which is maintained against current ZoneMinder. If you are upgrading from an older image that shipped ES 6.1.29, see [Upgrading the Event Server from 6.x to 7.x](#upgrading-the-event-server-from-6x-to-7x) — the configuration format changed.
 - **Font file location:** ZM 1.38 moved the default font from `/usr/share/zoneminder/www/fonts/default.zmfnt` to `/usr/share/zoneminder/fonts/default.zmfnt`. If your logs are spammed with `Invalid font location` errors, go to **Options → Config → FONT_FILE_LOCATION** and update it to `/usr/share/zoneminder/fonts/default.zmfnt`.
 - **Zone Units:** ZM 1.38 may log warnings like `Zone X has Units=Percent but Coords contain pixel values`. This happens when zones created in older versions have `Units` set to `Percent` but their coordinates are actually pixel values. Fix with: `UPDATE Zones SET Units = 'Pixels' WHERE Units = 'Percent' AND Coords REGEXP '[0-9]{3,}';` then restart ZoneMinder.
 
@@ -76,6 +76,31 @@ A detailed analysis of the changes from 1.36.33 to 1.38.0 can be seen in [docs/u
 
 - **MQTT segfault on Trixie:** There are [reports](https://forums.zoneminder.com/viewtopic.php?p=139150) of ZM 1.38 crashing with MQTT enabled on Debian 13. MQTT support is compiled in but use it with caution.
 - **Database upgrade "Incorrect datetime" error:** If the schema migration fails with a datetime error, you may need to run `TRUNCATE Monitor_Status;` on the database manually, then restart the container. See [this forum thread](https://forums.zoneminder.com/viewtopic.php?t=34263).
+
+## Upgrading the Event Server from 6.x to 7.x
+
+Images up to and including `1.38.3-jantman1` shipped [zmeventnotification](https://github.com/ZoneMinder/zmeventnotification) 6.1.29 and the `pyzm` Python library, both of which are archived upstream. Newer images ship [zmeventnotificationNg](https://github.com/ZoneMinder/zmeventnotificationNg) 7.0.29 and [pyzmNg](https://github.com/ZoneMinder/pyzmNg) 2.5.1 (published to PyPI as `pyzm`). Images tagged `-fork` ship *forks* of both, pinned by SHA, carrying PRs not yet merged upstream — see CLAUDE.md.
+
+This is a breaking change for your configuration; the image itself ships no config, so nothing migrates automatically.
+
+### Configuration is now YAML
+
+| ES 6 file | ES 7 file |
+|-----------|-----------|
+| `/etc/zm/zmeventnotification.ini` | `/etc/zm/zmeventnotification.yml` |
+| `/etc/zm/objectconfig.ini` | `/etc/zm/objectconfig.yml` |
+| `/etc/zm/secrets.ini` | `/etc/zm/secrets.yml` |
+| `/etc/zm/es_rules.json` | `/etc/zm/es_rules.yml` |
+
+Update your bind mounts accordingly (the included `docker-compose` files show the new paths), and start from the `*.EXAMPLE.yml` files in this repo. Upstream also ships converters — `tools/es_config_migrate_yaml.py` and `tools/config_migrate_yaml.py` — in the [zmeventnotificationNg repo](https://github.com/ZoneMinder/zmeventnotificationNg/tree/master/tools) if you would rather translate your existing INI files.
+
+### No more animations
+
+ES 7 removed GIF/animation generation. If your push notifications relied on it, they will silently fall back to a still image. The image includes `imageio` so a hook can re-implement animation locally via `Event.extract_frames()`.
+
+### No local inference
+
+The image is deliberately CPU-only and contains no CUDA, no GPU libraries, and no CUDA-enabled OpenCV — it is built to talk to a remote inference gateway, not to run models itself. `pyzm` is installed with the `[ml]` extra (shapely, numpy, Pillow, onnx, portalocker), not `[serve]` or `[full]`. If you set `ml_fallback_local` to `yes`, local detection will be slow at best.
 
 ## Enabling go2rtc (WebRTC Live Streaming)
 

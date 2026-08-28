@@ -1,0 +1,271 @@
+# Configuration file for object detection
+#
+# NOTE: ALL parameters here can be overridden on a per monitor basis.
+# Just add them under the correct monitors -> <id> section.
+#
+# The ml_sequence and stream_sequence structures define the detection
+# pipeline. All values are specified directly — no indirection needed.
+#
+# Path substitution: ${base_data_path} is replaced with the value from
+# general.base_data_path wherever it appears.
+
+general:
+  # Override pyzm settings (e.g. debug level).
+  pyzm_overrides:
+    log_level_debug: 5
+
+  # Directory holding ZoneMinder's zm.conf (and conf.d/*.conf). Only needed
+  # by the ZM Tags feature (tag_detected_objects), which reads ZM's DB
+  # credentials from these files. pyzm auto-discovers common locations
+  # (/etc/zm, /config, /etc/zoneminder), so most installs — including
+  # containers using /config — need nothing here. Set this only to force a
+  # non-standard path.
+  #zm_conf_path: /some/custom/path
+
+  # Secrets file for credential tokens (!TOKEN_NAME syntax)
+  secrets: /etc/zm/secrets.yml
+
+  # ZoneMinder connectivity
+  portal: "!ZM_PORTAL"
+  user: "!ZM_USER"
+  password: "!ZM_PASSWORD"
+  api_portal: "!ZM_API_PORTAL"
+  allow_self_signed: "yes"
+  #basic_user: user
+  #basic_password: password
+
+  # Base path for model files and data
+  base_data_path: /var/lib/zmeventnotification
+
+  # Image output settings
+  write_debug_image: "no"
+  write_image_to_zm: "yes"
+  show_percent: "yes"
+
+  # Show frame match type prefix in detection output:
+  # [a] = alarm frame, [s] = snapshot frame, [x] = other
+  # Useful for debugging which frame matched. Default: yes
+  show_frame_match_type: "yes"
+
+  # Write detected object labels as ZM Tags (requires ZM >= 1.37.44)
+  tag_detected_objects: "no"
+
+  # Polygon overlay settings
+  poly_color: "(255,255,255)"
+  poly_thickness: 2
+
+  # ZoneMinder zone import
+  #import_zm_zones: "yes"
+  only_triggered_zm_zones: "no"
+
+
+# Push notifications via FCM cloud function proxy
+# zm_detect reads registered tokens from ZM's Notifications table (via pyzm)
+# and sends push notifications directly after detection.
+# Requires ZM 1.39.2+ (Notifications API). Just set enabled to "yes" to use.
+# The URL and key below are the managed zmNinjaNG defaults (same as ES).
+# If you run your own cloud function, replace both values.
+push:
+  enabled: "no"
+  fcm_v1_url: "https://us-central1-zmng-b7af6.cloudfunctions.net/send_push"
+  fcm_v1_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJnZW5lcmF0b3IiOiJ6bW5nIiwiaWF0IjoxNzcyNTc5ODMyLCJjbGllbnQiOiJ6bW5nIn0.EVqWa1k_OeWlRk-IojL7rBwYKm_gLGobhoojhz-9fIg"
+  # Replace previous push for same monitor (collapses notifications)
+  replace_push_messages: "yes"
+  # Include event image URL in push notification
+  include_picture: "yes"
+  # Picture URL template — use EVENTID as placeholder for the event ID.
+  # Uses same format as ES picture_url so you can point both at the same secret.
+  # fid can be objdetect (annotated frame), snapshot, etc.
+  picture_url: "!ZMES_PICTURE_URL"
+  picture_portal_username: "!ZM_USER"
+  picture_portal_password: "!ZM_PASSWORD"
+  # Include profile name in push notifications. When enabled and the token
+  # has a profile (e.g. "Home Server"), it is shown as a subtitle on iOS
+  # and appended to the body on Android. Default: no
+  include_profile_in_push: "no"
+  # Send push even when detection finds no matches (useful for external
+  # sensor triggers where you want a notification regardless of ML results)
+  send_push_on_no_match: "no"
+  # Android notification priority
+  android_priority: "high"
+  # Android TTL in seconds (omit to use FCM default)
+  #android_ttl: 60
+
+
+# Remote ML gateway (pyzm.serve -- replaces legacy mlapi)
+# Start server on GPU box: python -m pyzm.serve --models yolo11s --port 5000
+# With auth: python -m pyzm.serve --models yolo11s --port 5000 --auth --auth-user admin --auth-password secret
+remote:
+  #ml_gateway: "http://192.168.1.183:5000"
+  #ml_fallback_local: "yes"
+
+  # Gateway mode: "url" (default) or "image"
+  #   url:   ZM box sends frame URLs; server fetches images directly from ZM
+  #          (more efficient when the GPU box can reach your ZM portal)
+  #   image: ZM box fetches frames, JPEG-encodes, and uploads to server
+  #ml_gateway_mode: "url"
+
+  # Auth credentials (optional -- only needed if server uses --auth)
+  #ml_user: "!ML_USER"
+  #ml_password: "!ML_PASSWORD"
+  ml_timeout: 60
+
+
+ml:
+  # Frame selection strategy
+  stream_sequence:
+    frame_set: "snapshot,alarm"
+    contig_frames_before_error: 5
+    max_attempts: 3
+    sleep_between_attempts: 4
+    # "yes" resolves "snapshot" to MaxScoreFrameId via the ZM API before
+    # fetching (stable frame ID, dedups against numeric entries).
+    # "no" passes fid=snapshot through to ZM unchanged.
+    convert_snapshot_to_fid: "no"
+
+  # ML detection pipeline — all values inline, no {{}} indirection
+  ml_sequence:
+    general:
+      model_sequence: "object,face,alpr"
+      # frame_strategy options: most_models (default), first, first_new, most, most_unique
+      frame_strategy: most_models
+      disable_locks: "no"
+      # Deduplicate static objects across detections
+      match_past_detections: "no"
+      past_det_max_diff_area: "5%"
+      car_past_det_max_diff_area: "10%"
+      # Maximum bounding box size to accept (px or %)
+      max_detection_size: "90%"
+      #ignore_past_detection_labels: ['dog', 'cat']
+      aliases:
+        - ['car', 'bus', 'truck', 'boat']
+        - ['broccoli', 'pottedplant']
+
+    object:
+      general:
+        pattern: "(person|car|motorbike|bus|truck|boat)"
+        same_model_sequence_strategy: first
+      sequence:
+        - name: TPU MobileDet
+          enabled: "no"
+          object_weights: "${base_data_path}/models/coral_edgetpu/ssdlite_mobiledet_coco_qat_postprocess_edgetpu.tflite"
+          object_labels: "${base_data_path}/models/coral_edgetpu/coco_indexed.names"
+          object_min_confidence: 0.6
+          object_framework: coral_edgetpu
+
+        - name: YOLOv4
+          enabled: "no"
+          object_config: "${base_data_path}/models/yolov4/yolov4.cfg"
+          object_weights: "${base_data_path}/models/yolov4/yolov4.weights"
+          object_labels: "${base_data_path}/models/yolov4/coco.names"
+          object_min_confidence: 0.3
+          object_framework: opencv
+          object_processor: gpu
+
+        - name: YOLO ONNX
+          enabled: "yes"
+          # Available models (replace weight file below):
+          #   yolo11n, yolo11s, yolo11m, yolo11l
+          #   yolo26n, yolo26s, yolo26m, yolo26l
+          # n=nano, s=small, m=medium, l=large (higher quality, slower)
+          object_weights: "${base_data_path}/models/ultralytics/yolo11n.onnx"
+          object_min_confidence: 0.3
+          object_framework: opencv
+          object_processor: gpu
+
+    face:
+      general:
+        pattern: ".*"
+        #pre_existing_labels: ['person']
+        same_model_sequence_strategy: union
+      sequence:
+        - name: TPU face detection
+          enabled: "no"
+          face_detection_framework: tpu
+          face_weights: "${base_data_path}/models/coral_edgetpu/ssd_mobilenet_v2_face_quant_postprocess_edgetpu.tflite"
+          face_min_confidence: 0.3
+
+        - name: DLIB face recognition
+          enabled: "yes"
+          #pre_existing_labels: ['face']
+          save_unknown_faces: "yes"
+          save_unknown_faces_leeway_pixels: 100
+          face_detection_framework: dlib
+          known_images_path: "${base_data_path}/known_faces"
+          unknown_images_path: "${base_data_path}/unknown_faces"
+          face_model: cnn
+          face_train_model: cnn
+          face_recog_dist_threshold: 0.6
+          face_num_jitters: 1
+          face_upsample_times: 1
+          max_size: 800
+
+    alpr:
+      general:
+        same_model_sequence_strategy: first
+        pre_existing_labels: ['car', 'motorbike', 'bus', 'truck', 'boat']
+        pattern: ".*"
+      sequence:
+        - name: Platerecognizer cloud
+          enabled: "yes"
+          alpr_api_type: cloud
+          alpr_service: plate_recognizer
+          alpr_key: "!PLATEREC_ALPR_KEY"
+          platerec_stats: "yes"
+          platerec_min_dscore: 0.1
+          platerec_min_score: 0.2
+          max_size: 1600
+          #platerec_payload:
+          #  regions: ['us']
+          #  camera_id: 12
+          #platerec_config:
+          #  region: strict
+          #  mode: fast
+
+    audio:
+      general:
+        pattern: ".*"
+        same_model_sequence_strategy: first
+      sequence:
+        - name: BirdNET
+          enabled: "no"
+          audio_framework: birdnet
+          # Minimum confidence threshold (0.0-1.0)
+          birdnet_min_conf: 0.5
+          # Location for seasonal species filtering (-1 = disabled)
+          birdnet_lat: -1
+          birdnet_lon: -1
+          # Sensitivity of the sigmoid function (higher = more sensitive)
+          birdnet_sensitivity: 1.0
+          # Overlap between 3-second audio chunks (0.0-2.9)
+          birdnet_overlap: 0.0
+
+
+# Monitor-specific overrides
+# Settings here are deep-merged into the global config, so you only
+# need to specify the keys you want to override.
+# Example for monitor ID 999:
+monitors:
+  999:
+    wait: 5
+    stream_sequence:
+      resize: "no"
+
+    # Override ml_sequence for this monitor (deep-merged with global ml_sequence)
+    ml_sequence:
+      general:
+        model_sequence: "object,alpr"
+        match_past_detections: "yes"
+      object:
+        general:
+          pattern: "(person)"
+
+    zones:
+      my_driveway:
+        coords: "306,356 1003,341 1074,683 154,715"
+        detection_pattern: "(person|car)"
+        # ignore_pattern suppresses matching labels even if detection_pattern allows them.
+        # Useful for excluding parked cars or other stationary objects from a zone.
+        ignore_pattern: "(car|truck)"
+      some_other_area:
+        coords: "0,0 200,300 700,900"
