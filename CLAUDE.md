@@ -4,27 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Docker image for ZoneMinder 1.38.4 (video surveillance) on Debian 13 (Trixie), using Apache + PHP 8.4. ZoneMinder is compiled from source in a multi-stage Docker build. Requires an external MySQL/MariaDB database (not bundled). Includes the ZM Event Notification Server (ZMES) — zmeventnotificationNg 7.0.29 with pyzmNg 2.5.1 — for event-driven object detection via WebSocket on port 9000, and go2rtc for WebRTC/MSE/HLS live streaming. This is a personal WIP project (MIT license).
+Docker image for ZoneMinder 1.38.4 (video surveillance) on Debian 13 (Trixie), using Apache + PHP 8.4. ZoneMinder is compiled from source in a multi-stage Docker build. Requires an external MySQL/MariaDB database (not bundled). Includes the ZM Event Notification Server (ZMES) — zmeventnotificationNg 7.0.31 with pyzmNg 2.5.3 — for event-driven object detection via WebSocket on port 9000, and go2rtc for WebRTC/MSE/HLS live streaming. This is a personal WIP project (MIT license).
 
-**This image ships forks, not upstream releases**, and is released that way on purpose —
-waiting on upstream would have blocked a release of work already soaked on live traffic.
-Releases built this way carry a `-fork` version suffix. Both pins are by SHA:
+Both ZMES and `pyzm` are pinned to upstream releases: `ZMES_VERSION=v7.0.31` (a git tag)
+and `PYZM_VERSION=2.5.3` (PyPI). Two upstream fixes this deployment depends on set a
+floor under those pins — **do not pin below them**:
 
-| Component | Pinned to | PR |
+| Component | Floor | Why |
 |---|---|---|
-| zmeventnotificationNg | `jantman/zmeventnotificationNg` @ `issues/48` | [ZoneMinder/zmeventnotificationNg#49](https://github.com/ZoneMinder/zmeventnotificationNg/pull/49) — joins config zone patterns onto ZM zone geometry by name |
-| pyzmNg | `jantman/pyzmNg` @ `integration/66-68` | [#69](https://github.com/ZoneMinder/pyzmNg/pull/69) `zone_match_strategy` (used here) + [#67](https://github.com/ZoneMinder/pyzmNg/pull/67) GPU fallback (gateway-side, carried for parity) |
+| zmeventnotificationNg | `v7.0.30` | [#49](https://github.com/ZoneMinder/zmeventnotificationNg/pull/49) joins config zone patterns onto ZM zone geometry by name, so `objectconfig.yml` can drop every `coords:` and set `import_zm_zones: "yes"` |
+| pyzmNg | `2.5.2` | [#69](https://github.com/ZoneMinder/pyzmNg/pull/69) `zone_match_strategy`, which `objectconfig.yml` sets to `first_intersecting` to restore ES 6 zone resolution. Zone filtering runs here, client-side in `pyzm.ml.filters`, not in the gateway |
 
-Neither fork bumps a version string, so the build asserts a marker symbol from each
-(`normalize_zone_name`, `ZoneMatchStrategy`) rather than trusting the pin. Keep those
-assertions for as long as the pins are forks — they are the only thing that would catch a
-silently wrong ref, whose sole symptom is zone patterns quietly not applying.
+Images `1.38.4-jantman1-fork` and earlier built these two commits from forks pinned by SHA,
+and carried the `-fork` version suffix; that is over, and releases from here on drop the
+suffix. The build-time marker assertions that guarded those SHAs (`normalize_zone_name`,
+`ZoneMatchStrategy`) are gone with them — a release tag and a PyPI version say what they
+are, which is what the assertions existed to prove.
 
-Both forks carry an annotated tag on the pinned commit — `image-pin-pr49` and
-`image-pin-pr67-pr69` — because the PR branches will be deleted once the PRs merge, and an
-unreachable commit means this image can no longer be rebuilt. **Do not delete those tags
-while a released image pins them.** Restore the upstream tag / PyPI pin and drop the `-fork`
-suffix once the PRs are released.
+The fork pins are still reachable only because `jantman/zmeventnotificationNg` and
+`jantman/pyzmNg` carry the annotated tags `image-pin-pr49` and `image-pin-pr67-pr69` on
+those commits. **Do not delete those tags while `1.38.4-jantman1-fork` is a release anyone
+might rebuild.**
 
 The image is deliberately **CPU-only**: no CUDA, no GPU libraries, no CUDA-enabled OpenCV. It performs no inference; a separate remote gateway does. Keeping GPU libraries out prevents an accidental local-inference fallback from masking a gateway outage. `pyzm` is installed with the `[ml]` extra only — never `[serve]` or `[full]`, which pull ultralytics/fastapi.
 
