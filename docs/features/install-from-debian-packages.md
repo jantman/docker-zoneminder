@@ -204,8 +204,59 @@ survive `apt-get purge equivs && apt-get autoremove` — more than the systemd i
 - The project repository publishes arm64 as well as amd64, should the single-arch CI build
   ever change.
 
+## Verification results (Milestone 2)
+
+Built locally (`docker build -t docker-zoneminder:dev .`) and run via `docker-compose` against
+MariaDB 11.8 on an empty database.
+
+**Build.** The repository signature verified through `signed-by`, the dummy package installed,
+`zoneminder=1.38.4+trixie1` installed, and the build-time smoke test passed — including the
+two new assertions (`ZM_OPT_FFMPEG` seeded as `'1'`; no systemd/polkit/dbus/rsyslog and no
+`/sbin/init`). The apt resolution confirms the mitigation works: `systemd`, `systemd-sysv`,
+`polkitd`, `pkexec`, `rsyslog`, `dbus` and `default-mysql-client` are all absent from the
+package set, and `mariadb-client` satisfies ZoneMinder's database-client alternative directly.
+
+**Result: 752 packages, 2.600 GB**, against the 748 / 2.593 GB of the source-built release —
+in line with the +7.3 MB the investigation projected for the mitigated build.
+
+**Runtime.**
+
+| Check | Result |
+|---|---|
+| `dpkg-query zoneminder` | `1.38.4+trixie1` |
+| Database seeding | `zm_create.sql` + `triggers.sql` ran, `zmupdate.pl` reported 1.38.4, config freshened (246 entries) |
+| `ZM_OPT_FFMPEG` / `ZM_PATH_FFMPEG` (seeded `Config`) | `1` / `/usr/bin/ffmpeg` — **the motivating fix, confirmed** |
+| `/` | 302 → `/?view=privacy`, renders `<title>ZM - Privacy</title>` |
+| `/cache` | Page emits `cache/…` URLs; `cache_bust()` symlinks land in `/var/cache/zoneminder/cache` as `www-data`; fetching one returns 200 with the full asset |
+| `/cgi-bin/nph-zms`, `/cgi-bin/zms` | Both execute (`nph-zms` 200; `zms` 500 from `cgi:error` without stream parameters, which is normal) |
+| `/api/host/getVersion.json`, `/server-status` | 200 |
+| `zmdc.pl status` | `zmfilter.pl` ×2, `zmwatch.pl`, `zmupdate.pl -c`, `zmstats.pl` — all valid |
+| `/var/log/zm`, container log | No `ERR`/`FAT`, no errors |
+| ZMES / pyzm | ES 7.0.31, pyzm 2.5.3 — unchanged |
+| go2rtc | API answers on 1984, RTSP/WebRTC listening |
+| `/var/tmp/zm` | `drwxrwxr-- www-data:www-data`, created by `verifyFolder()` as predicted |
+| `/etc/zm` | `root:www-data 770` — the image's convention survived the postinst |
+
+Effective config as ZoneMinder's own loader resolves it (`ZM_PATH_ZMS` and friends live in
+`conf.d`, **not** in the database `Config` table — worth knowing before writing a check
+against the wrong source):
+
+```
+ZM_PATH_ZMS=/cgi-bin/zms          <- zmcustom.conf beats the package's 01-system-paths.conf
+ZM_DIR_CACHE=/var/cache/zoneminder/cache
+ZM_DIR_EVENTS=/var/cache/zoneminder/events
+ZM_PATH_FFMPEG=/usr/bin/ffmpeg    ZM_OPT_FFMPEG=1
+ZM_PATH_ARP=/usr/sbin/arp         ZM_PATH_IP=/usr/sbin/ip
+```
+
+One thing the investigation did not surface, found here: with `ZM_DIR_CACHE` moving into a
+subdirectory, that subdirectory has to be owned by `www-data` or `cache_bust()`'s `@symlink`
+silently fails and the web UI loses cache-busting. On a pre-existing bind mount the entrypoint
+created it as `root`, so `entrypoint.sh` now creates any missing cache subdirectory as
+`www-data` (leaving directories that already exist untouched, ownership and modes included).
+
 ## Progress
 
 - **Milestone 1: complete.**
-- **Milestone 2: not started.**
+- **Milestone 2: complete.** See "Verification results" above.
 - **Milestone 3: not started.**
