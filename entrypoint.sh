@@ -36,14 +36,25 @@ mysql_ready() {
 }
 
 # Ensure cache subdirectories exist (but do NOT recursive chown/chmod — too slow on large
-# volumes). Any subdirectory we have to create is given to www-data: ZoneMinder writes to
-# all four as www-data, and `cache` in particular is where the web UI symlinks cache-busted
-# assets that Apache then serves from /cache. Directories that already exist are left alone,
-# ownership and modes included.
-for cachedir in events images temp cache; do
+# volumes). Directories that already exist are left alone: they hold the event store, and
+# their ownership may have been set deliberately.
+for cachedir in events images temp; do
     [[ -d "/var/cache/zoneminder/${cachedir}" ]] \
         || install -m 0775 -o www-data -g www-data -d "/var/cache/zoneminder/${cachedir}"
 done
+
+# `cache` is the exception and must be fixed up even when it already exists. ZM_DIR_CACHE
+# moved from /var/cache/zoneminder to /var/cache/zoneminder/cache when this image switched
+# to the official Debian packages. Images up to 1.38.4-jantman2 created that subdirectory
+# as root and then never wrote to it — cache_bust() symlinked into the mount root instead —
+# so on a bind mount carried over from one of those images it exists, owned root:root 0755,
+# and www-data cannot write to it. cache_bust()'s @symlink then fails silently: pages still
+# render, because it falls back to the un-busted asset path, but cache-busting stops working
+# and every asset on every page load writes a WRN row to the database Logs table.
+#
+# This touches the directory itself only, never its contents, so it stays cheap. Unlike the
+# event store there is nothing here a user could have configured deliberately.
+install -m 0775 -o www-data -g www-data -d /var/cache/zoneminder/cache
 
 echo "chown and chmod /etc/zm and /var/log/zm"
 chown -R root:www-data /etc/zm

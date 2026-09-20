@@ -249,11 +249,41 @@ ZM_PATH_FFMPEG=/usr/bin/ffmpeg    ZM_OPT_FFMPEG=1
 ZM_PATH_ARP=/usr/sbin/arp         ZM_PATH_IP=/usr/sbin/ip
 ```
 
-One thing the investigation did not surface, found here: with `ZM_DIR_CACHE` moving into a
-subdirectory, that subdirectory has to be owned by `www-data` or `cache_bust()`'s `@symlink`
-silently fails and the web UI loses cache-busting. On a pre-existing bind mount the entrypoint
-created it as `root`, so `entrypoint.sh` now creates any missing cache subdirectory as
-`www-data` (leaving directories that already exist untouched, ownership and modes included).
+### The upgrade case, which the investigation did not surface
+
+With `ZM_DIR_CACHE` moving into a subdirectory, that subdirectory has to be writable by
+`www-data` or `cache_bust()`'s `@symlink` fails. Verified by running the released
+`1.38.4-jantman2` image against a fresh bind mount and then starting this image on the same
+mount and database.
+
+What the old image leaves behind: `cache/` exists and is **`root:root 0755` and empty** — its
+entrypoint created it with `mkdir -p` as root and then never used it, because `ZM_DIR_CACHE`
+was the mount root, where the 26 cache-busted symlinks actually live (owned `33:33`).
+
+Unfixed, the upgraded container therefore cannot write to its own cache directory:
+
+- `@symlink` fails and `cache_bust()` falls back to the un-busted asset path. Pages still
+  render and every asset still returns 200, so **there is no visible breakage** — the loss is
+  silent.
+- Cache-busting stops working, which bites precisely when it matters: right after an upgrade,
+  when browsers are holding the previous release's CSS and JS.
+- Every asset on every page load writes a `WRN` row to the database `Logs` table
+  (`Failed linking css/reset.css to ...`). Two page loads produced 52 rows.
+
+A create-if-missing guard does not help, because the directory is not missing. `entrypoint.sh`
+therefore fixes up `cache` unconditionally with `install -d`, which touches the directory
+itself and never its contents, so it stays cheap on a large event store. The other three
+subdirectories keep create-if-missing and are left alone if present — they hold the event
+store and their ownership may have been set deliberately; `cache` is the one directory where
+nothing a user could have configured lives, because no released image ever wrote to it.
+
+Re-verified after the fix, starting from a `root:root` `cache/`: 26 symlinks created, the
+directory ends up `33:33 0775`, the page references `cache/...` URLs again, `/cache/<file>`
+returns 200 with the full asset, and zero `Failed linking` rows.
+
+The 26 stale symlinks the old image left in the mount root are now unreferenced — `/cache`
+no longer maps to that directory. They are harmless dead weight; they are not removed
+automatically, since that directory is the user's data.
 
 ## Progress
 
