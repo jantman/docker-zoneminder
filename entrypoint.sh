@@ -35,8 +35,15 @@ mysql_ready() {
     mariadb-admin ping --host=$ZM_DB_HOST --user=$ZM_DB_USER --password=$ZM_DB_PASS > /dev/null 2>&1
 }
 
-# Ensure cache subdirectories exist (but do NOT recursive chown/chmod — too slow on large volumes)
-mkdir -p /var/cache/zoneminder/{events,images,temp,cache}
+# Ensure cache subdirectories exist (but do NOT recursive chown/chmod — too slow on large
+# volumes). Any subdirectory we have to create is given to www-data: ZoneMinder writes to
+# all four as www-data, and `cache` in particular is where the web UI symlinks cache-busted
+# assets that Apache then serves from /cache. Directories that already exist are left alone,
+# ownership and modes included.
+for cachedir in events images temp cache; do
+    [[ -d "/var/cache/zoneminder/${cachedir}" ]] \
+        || install -m 0775 -o www-data -g www-data -d "/var/cache/zoneminder/${cachedir}"
+done
 
 echo "chown and chmod /etc/zm and /var/log/zm"
 chown -R root:www-data /etc/zm
