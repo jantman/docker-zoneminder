@@ -1,98 +1,3 @@
-# =============================================================================
-# Stage 1: Builder - Compile ZoneMinder 1.38.4 from source
-# =============================================================================
-FROM debian:13.6 AS builder
-
-ARG DEBIAN_FRONTEND=noninteractive
-ARG ZM_VERSION=1.38.4
-# zmeventnotificationNg (ES 7). A release tag of ZoneMinder/zmeventnotificationNg.
-# v7.0.30 released ZoneMinder/zmeventnotificationNg#49, which joins config zone
-# patterns onto ZM-imported zone geometry by name -- what lets objectconfig.yml drop
-# every hardcoded `coords:` line and set import_zm_zones: "yes". Images before
-# 1.38.4-jantman2 carried that commit as a fork pin; do not pin below v7.0.30.
-ARG ZMES_VERSION=v7.0.31
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        # Build tools
-        build-essential \
-        cmake \
-        git \
-        pkg-config \
-        # Required libraries
-        libjpeg62-turbo-dev \
-        default-libmysqlclient-dev \
-        libcurl4-openssl-dev \
-        libssl-dev \
-        libavcodec-dev \
-        libavdevice-dev \
-        libavfilter-dev \
-        libavformat-dev \
-        libavutil-dev \
-        libswresample-dev \
-        libswscale-dev \
-        libbz2-dev \
-        zlib1g-dev \
-        # Optional but recommended
-        libpcre2-dev \
-        libvlc-dev \
-        libvncserver-dev \
-        libv4l-dev \
-        libmosquittopp-dev \
-        libgsoap-dev \
-        gsoap \
-        nlohmann-json3-dev \
-        libunwind-dev \
-        # Perl (needed for cmake checks and ZM Perl modules)
-        perl \
-        libdate-manip-perl \
-        libdbd-mysql-perl \
-        libphp-serialization-perl \
-        libsys-mmap-perl \
-        libwww-perl \
-        libdata-uuid-perl \
-        libcrypt-eksblowfish-perl \
-        libdata-entropy-perl \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN git clone --branch ${ZM_VERSION} --depth 1 --recurse-submodules \
-        https://github.com/ZoneMinder/zoneminder.git /src/zoneminder
-
-WORKDIR /src/zoneminder
-
-RUN cmake \
-        -DCMAKE_INSTALL_PREFIX=/usr \
-        -DCMAKE_SKIP_RPATH=ON \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DZM_WEB_USER=www-data \
-        -DZM_WEB_GROUP=www-data \
-        -DZM_CONFIG_DIR=/etc/zm \
-        -DZM_CONFIG_SUBDIR=/etc/zm/conf.d \
-        -DZM_RUNDIR=/run/zm \
-        -DZM_SOCKDIR=/run/zm \
-        -DZM_TMPDIR=/tmp/zm \
-        -DZM_LOGDIR=/var/log/zm \
-        -DZM_WEBDIR=/usr/share/zoneminder/www \
-        -DZM_CGIDIR=/usr/lib/zoneminder/cgi-bin \
-        -DZM_CACHEDIR=/var/cache/zoneminder \
-        -DZM_CONTENTDIR=/var/lib/zoneminder \
-        -DZM_DIR_EVENTS=/var/cache/zoneminder/events \
-        -DZM_SYSTEMD=OFF \
-        -DBUILD_MAN=OFF \
-        -DZM_NO_X10=ON \
-        . \
-    && make -j$(nproc) \
-    && make DESTDIR=/zminstall install
-
-# Fetch the ZM Event Notification Server (ES 7 / zmeventnotificationNg) at a pinned tag.
-# Done after the ZoneMinder build so bumping ZMES_VERSION does not invalidate the ZM
-# compile cache.
-RUN git clone --branch ${ZMES_VERSION} --depth 1 \
-        https://github.com/ZoneMinder/zmeventnotificationNg.git /src/zmeventnotification \
-    && rm -rf /src/zmeventnotification/.git
-
-# =============================================================================
-# Stage 2: Runtime
-# =============================================================================
 FROM debian:13.6
 
 ENV ZM_DB_HOST=mariadb
@@ -104,6 +9,16 @@ ENV ZM_DB_SSL=no
 ENV TZ=America/New_York
 
 ARG DEBIAN_FRONTEND=noninteractive
+# Full Debian version string of the official ZoneMinder package, not just the upstream
+# version: the separator before the vendor suffix changed mid-series (1.38.0-trixie1 ..
+# 1.38.2-trixie1, then 1.38.3+trixie1, 1.38.4+trixie1), so it cannot be reconstructed.
+ARG ZM_VERSION=1.38.4+trixie1
+# zmeventnotificationNg (ES 7). A release tag of ZoneMinder/zmeventnotificationNg.
+# v7.0.30 released ZoneMinder/zmeventnotificationNg#49, which joins config zone
+# patterns onto ZM-imported zone geometry by name -- what lets objectconfig.yml drop
+# every hardcoded `coords:` line and set import_zm_zones: "yes". Images before
+# 1.38.4-jantman2 carried that commit as a fork pin; do not pin below v7.0.30.
+ARG ZMES_VERSION=v7.0.31
 ARG GO2RTC_VERSION=v1.9.14
 # pyzmNg publishes to PyPI under the name "pyzm"; the 2.x series is pyzmNg.
 # The [ml] extra brings shapely (zone polygons, required by pyzm.ml.filters), numpy,
@@ -123,77 +38,83 @@ ARG PYZM_VERSION=2.5.3
 ARG IMAGEIO_VERSION=2.37.4
 ARG NEWRELIC_VERSION=13.4.0
 
-# Install runtime dependencies
+# Add the official ZoneMinder 1.38 repository -- Debian's own zoneminder package is 1.36.x
+# in trixie, forky and sid alike, so 1.38 comes only from here. Flat repo (trailing slash,
+# no components). The key is scoped to this one source with signed-by rather than dropped
+# into trusted.gpg.d, so it cannot vouch for Debian's own archives, and its fingerprint is
+# hardcoded and asserted -- deliberately not an ARG, since overriding it would defeat the
+# point -- so a substituted key fails the build instead of being trusted silently.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates wget gnupg2 \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && wget -q -O /etc/apt/keyrings/zmrepo.asc \
+        https://zmrepo.zoneminder.com/debian/archive-keyring.gpg \
+    && gpg --show-keys --with-colons /etc/apt/keyrings/zmrepo.asc \
+        | awk -F: '/^fpr:/{print $10}' | grep -qx E148DCEBF90919B49C68F056A8C670C86F88B031 \
+    && chmod 0644 /etc/apt/keyrings/zmrepo.asc \
+    && echo 'deb [signed-by=/etc/apt/keyrings/zmrepo.asc] https://zmrepo.zoneminder.com/debian/release-1.38 trixie/' \
+        > /etc/apt/sources.list.d/zoneminder.list \
+    && rm -rf /var/lib/apt/lists/*
+
+# Satisfy two ZoneMinder Depends with a dummy package instead of the real thing.
+#
+#   policykit-1 | pkexec        -> pkexec -> polkitd -> libpam-systemd -> systemd
+#   rsyslog | system-log-daemon -> rsyslog
+#
+# Neither is reachable in this image. zmsystemctl.pl is the only pkexec consumer (pkexec is
+# its shebang), and zmpkg.pl only calls it when `ps -o comm= -p 1` reports systemd -- PID 1
+# here is s6-svscan, so that branch never runs. Nothing logs to syslog either: ZoneMinder
+# logs to /var/log/zm and the s6 services log to the container's stdout.
+#
+# policykit-1 and system-log-daemon are both pure virtual packages with no real provider,
+# so Provides: on them satisfies the alternatives without shadowing or displacing anything
+# real. Built with dpkg-deb rather than equivs: equivs pulls autoconf, groff-base, man-db
+# and libmagic1t64, which survive an autoremove and cost more than the systemd they save.
+RUN mkdir -p /tmp/zmdeps/DEBIAN \
+    && printf '%s\n' \
+        'Package: zoneminder-container-deps' \
+        'Version: 1.0' \
+        'Architecture: all' \
+        'Maintainer: docker-zoneminder <none@example.com>' \
+        'Provides: policykit-1, system-log-daemon' \
+        'Section: misc' \
+        'Priority: optional' \
+        'Description: Satisfy ZoneMinder deps that are unreachable in this container' \
+        ' Stands in for polkit and a syslog daemon; see the Dockerfile for why.' \
+        > /tmp/zmdeps/DEBIAN/control \
+    && dpkg-deb --build /tmp/zmdeps /tmp/zoneminder-container-deps.deb \
+    && dpkg -i /tmp/zoneminder-container-deps.deb \
+    && rm -rf /tmp/zmdeps /tmp/zoneminder-container-deps.deb
+
+# Install ZoneMinder from the official package, plus the runtime dependencies that are ours
+# rather than ZoneMinder's. Anything the zoneminder package already declares as a Depends is
+# deliberately absent from this list -- the whole ZoneMinder Perl module wall, ffmpeg, sudo,
+# zip, javascript-common, arp-scan, net-tools, iproute2, the php-* extensions, and the
+# libav*/libjpeg/libmariadb/libmosquittopp/libgsoap/libjwt/libvncclient shared libraries.
+# apache2 and libapache2-mod-php are only Recommends, so they stay explicit.
 RUN apt-get update \
     && apt-get upgrade --yes \
     && apt-get install --yes --no-install-recommends \
+        zoneminder=${ZM_VERSION} \
         # Web server and PHP
         apache2 \
         libapache2-mod-php \
         php \
-        php-mysql \
-        php-gd \
-        php-apcu \
-        php-intl \
-        php-xml \
-        php-curl \
         # Media
-        ffmpeg \
         gifsicle \
-        # Database client
+        # Database client: the entrypoint calls mariadb and mariadb-admin directly
         mariadb-client \
         # Process supervision
         s6 \
         # Tools
-        wget \
         git \
-        gnupg2 \
-        sudo \
-        zip \
-        javascript-common \
-        arp-scan \
-        net-tools \
-        iproute2 \
         tzdata \
-        ca-certificates \
         # ZMES build deps (needed for cpanm and pip install)
         build-essential \
         cpanminus \
         python3-pip \
         python3-requests \
         python3-opencv \
-        # Perl runtime modules for ZoneMinder
-        libdate-manip-perl \
-        libdatetime-perl \
-        libdbd-mysql-perl \
-        libphp-serialization-perl \
-        libsys-mmap-perl \
-        libwww-perl \
-        liburi-perl \
-        libdata-dump-perl \
-        libdata-uuid-perl \
-        libcrypt-eksblowfish-perl \
-        libcryptx-perl \
-        libdata-entropy-perl \
-        libfile-slurp-perl \
-        libnumber-bytes-human-perl \
-        libsys-cpu-perl \
-        libsys-meminfo-perl \
-        libclass-std-fast-perl \
-        libsoap-wsdl-perl \
-        libio-socket-multicast-perl \
-        libio-socket-ssl-perl \
-        libdigest-sha-perl \
-        libmime-lite-perl \
-        libmime-tools-perl \
-        libmodule-load-conditional-perl \
-        libnet-sftp-foreign-perl \
-        libarchive-zip-perl \
-        libdevice-serialport-perl \
-        libimage-info-perl \
-        libio-interface-perl \
-        libjson-maybexs-perl \
-        liburi-encode-perl \
         # ZMES-specific Perl modules (see upstream install.sh)
         libcrypt-mysql-perl \
         libcrypt-openssl-rsa-perl \
@@ -207,26 +128,26 @@ RUN apt-get update \
         libgeos-dev \
         # VAAPI hardware acceleration
         intel-media-va-driver \
-        # Shared libraries needed by ZM binaries
-        libjpeg62-turbo \
-        libpcre2-8-0 \
-        libmosquittopp1 \
-        libunwind8 \
-        libgsoap-2.8.135 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy compiled ZoneMinder from builder
-COPY --from=builder /zminstall /
+# Fetch the ZM Event Notification Server (ES 7 / zmeventnotificationNg) at a pinned tag.
+# Done after the package install so bumping ZMES_VERSION does not invalidate that layer.
+RUN git clone --branch ${ZMES_VERSION} --depth 1 \
+        https://github.com/ZoneMinder/zmeventnotificationNg.git /tmp/zmeventnotification \
+    && rm -rf /tmp/zmeventnotification/.git
 
-# Create ZM directories and set permissions (normally done by Debian package postinst)
-RUN mkdir -p /etc/zm/conf.d \
-    && mkdir -p /var/cache/zoneminder/{events,images,temp,cache} \
-    && mkdir -p /var/log/zm \
-    && mkdir -p /var/lib/zoneminder \
-    && mkdir -p /run/zm \
-    && mkdir -p /tmp/zm \
+# Apply the ownership and modes this image has always used. This must run after the
+# zoneminder package, whose postinst rewrites /etc/zm to its own preference of
+# www-data:root 640. The entrypoint re-applies all of this at every start.
+#
+# The package ships /etc/zm/conf.d, /var/log/zm and all four /var/cache/zoneminder
+# subdirectories itself, so only /run/zm has to be created -- it comes from tmpfiles.d,
+# which needs a systemd this image deliberately does not have. /var/tmp/zm (the package's
+# ZM_TMPDIR, backing ZM_DIR_EXPORTS and ZM_PATH_SWAP) is deliberately not created either:
+# zmpkg.pl's verifyFolder() mkdirs it at every start.
+RUN install -m 0750 -o www-data -g www-data -d /run/zm \
     && chown -R root:www-data /etc/zm \
-    && chown -R www-data:www-data /var/cache/zoneminder /var/log/zm /var/lib/zoneminder /run/zm /tmp/zm \
+    && chown -R www-data:www-data /var/cache/zoneminder /var/log/zm \
     && chmod -R 770 /etc/zm /var/log/zm
 
 # Install pyzmNg and the one ZMES Perl dependency Debian does not package
@@ -244,9 +165,8 @@ RUN wget -q -O /usr/local/bin/go2rtc \
         https://github.com/AlexxIT/go2rtc/releases/download/${GO2RTC_VERSION}/go2rtc_linux_amd64 \
     && chmod +x /usr/local/bin/go2rtc
 
-# Copy content files and the pinned ES 7 checkout from the builder stage
+# Copy content files
 COPY ./content/ /tmp/
-COPY --from=builder /src/zmeventnotification/ /tmp/zmeventnotification/
 
 # Install config files, s6 services, ZMES files
 RUN install -m 0644 -o root -g root /tmp/zm-site.conf /etc/apache2/sites-available/zm-site.conf \
@@ -285,15 +205,21 @@ RUN install -m 0644 -o root -g root /tmp/zm-site.conf /etc/apache2/sites-availab
     && rm -Rf /tmp/*
 
 # Build-time smoke test. This repo has no test suite, so this is what stops a broken
-# dependency set from ever being pushed. The first three checks are the consumer's
-# verification block verbatim; the last two assert the CPU-only constraint.
+# dependency set from ever being pushed. The first five checks cover ZMES and its consumer's
+# verification block; the next two assert the CPU-only constraint; the last three assert
+# what installing ZoneMinder from the package is for -- a fresh database seeded with ffmpeg
+# enabled, and no init system, policy daemon, message bus or syslog daemon dragged in
+# behind it.
 RUN python3 -c "import pyzm, shapely, newrelic, imageio, cv2, numpy; print('pyzm', pyzm.__version__)" \
     && python3 -c "import zmes_hook_helpers.utils, zmes_hook_helpers.common_params, zmes_hook_helpers.push" \
     && /var/lib/zmeventnotification/bin/zm_detect.py --bareversion \
     && perl -MZmEventNotification::Version -e 'print "ES $ZmEventNotification::Version::VERSION\n"' \
     && test -x /var/lib/zmeventnotification/bin/pushapi_pushover.py \
     && python3 -c "import cv2, sys; sys.exit(0 if not hasattr(cv2, 'cuda') or cv2.cuda.getCudaEnabledDeviceCount() == 0 else 1)" \
-    && ! pip list 2>/dev/null | grep -iE '^(torch|ultralytics|onnxruntime-gpu|nvidia-|opencv-python)'
+    && ! pip list 2>/dev/null | grep -iE '^(torch|ultralytics|onnxruntime-gpu|nvidia-|opencv-python)' \
+    && grep -q "'ZM_OPT_FFMPEG', Value = '1'" /usr/share/zoneminder/db/zm_create.sql \
+    && ! dpkg-query -W -f='${Package} ${Status}\n' systemd systemd-sysv polkitd pkexec rsyslog dbus 2>/dev/null | grep -q 'install ok installed' \
+    && test ! -e /sbin/init
 
 VOLUME /var/cache/zoneminder
 VOLUME /var/log/zm

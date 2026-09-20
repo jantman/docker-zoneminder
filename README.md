@@ -6,7 +6,7 @@ Modern, best-practices Debian-based Zoneminder container
 
 **IMPORTANT:** This is a personal project only. PRs are accepted, but this is not supported and "issues" will likely not be fixed or responded to. This is only for people who understand the details of everything invovled, sorry.
 
-This repo attempts to provide a modern, best-practices Docker image for current ZoneMinder versions, using a current Debian version base. The image provides ZoneMinder 1.38.4 (compiled from source) on Debian 13 (Trixie) with Apache + PHP 8.4, and includes [go2rtc](https://github.com/AlexxIT/go2rtc) for WebRTC/MSE/HLS live streaming. It requires an external MySQL/MariaDB server (the example docker-compose files use MariaDB 11.8 LTS). The image is vehemently NOT auto-updating, as doing so in a Docker image is a mortal sin. If you want to update, then pull a newer tag.
+This repo attempts to provide a modern, best-practices Docker image for current ZoneMinder versions, using a current Debian version base. The image provides ZoneMinder 1.38.4 (installed from the [official ZoneMinder Debian packages](https://zmrepo.zoneminder.com/debian/release-1.38)) on Debian 13 (Trixie) with Apache + PHP 8.4, and includes [go2rtc](https://github.com/AlexxIT/go2rtc) for WebRTC/MSE/HLS live streaming. It requires an external MySQL/MariaDB server (the example docker-compose files use MariaDB 11.8 LTS). The image is vehemently NOT auto-updating, as doing so in a Docker image is a mortal sin. If you want to update, then pull a newer tag.
 
 **NOTE:** If you want to use the event server, then you'll need to mount the appropriate configuration files in to the image at ``/etc/zm/es_rules.yml``, ``/etc/zm/zmeventnotification.yml``, ``/etc/zm/objectconfig.yml``, and ``/etc/zm/secrets.yml``; examples are included in this repo. These are YAML as of ES 7 — see [Upgrading the Event Server from 6.x to 7.x](#upgrading-the-event-server-from-6x-to-7x) if you are coming from an older image.
 
@@ -42,6 +42,15 @@ In addition, the output of `mod_status` is exposed at `/server-status`.
 | `ZM_DB_SSL` | `no` | Set to `yes` to use SSL for MariaDB connections; `no` adds `--skip-ssl` to client commands |
 | `TZ` | `America/New_York` | Timezone (also sets PHP timezone) |
 
+## Where ZoneMinder comes from
+
+ZoneMinder is installed from the [official ZoneMinder Debian packages](https://zmrepo.zoneminder.com/debian/release-1.38) (Debian's own `zoneminder` package is still 1.36.x, so it is not usable here). Images up to and including `1.38.4-jantman2` compiled ZoneMinder from source instead.
+
+For almost everything this is invisible — the two builds produce the same files — but there are two user-visible consequences:
+
+- **A fresh install now has ffmpeg video encoding enabled.** The source build ran `cmake` in a stage that had no `ffmpeg` installed, so feature detection failed and every fresh database was seeded with `ZM_OPT_FFMPEG=no` and `ZM_PATH_FFMPEG=FFMPEG_EXECUTABLE-NOTFOUND`. Existing installs are unaffected: the setting lives in the database and is not rewritten on upgrade, so if you were bitten by this, fix it once under **Options → Images → OPT_FFMPEG** and **Options → Paths → PATH_FFMPEG** (`/usr/bin/ffmpeg`).
+- **The "Regexp" HTTP source method is gone.** The official packages are not built against libpcre2, and the flag is compiled in, so this cannot be restored by configuration. It only affects monitors of type Remote with protocol HTTP; change their **Method** from Regexp to Simple. Nothing else in ZoneMinder uses it.
+
 ## Upgrading from 1.36.x to 1.38.0
 
 ZoneMinder 1.38.0 is a major upgrade from 1.36.x with significant changes including a redesigned monitor function model, role-based access control (RBAC), 79 database schema migrations, and go2rtc-based live streaming replacing Janus/RTSP2Web. The entrypoint handles the database schema migration automatically, but there are several things to be aware of.
@@ -75,6 +84,7 @@ A detailed analysis of the changes from 1.36.33 to 1.38.0 can be seen in [docs/u
 ### Known Issues
 
 - **MQTT segfault on Trixie:** There are [reports](https://forums.zoneminder.com/viewtopic.php?p=139150) of ZM 1.38 crashing with MQTT enabled on Debian 13. MQTT support is compiled in but use it with caution.
+- **No "Regexp" HTTP source method:** see [Where ZoneMinder comes from](#where-zoneminder-comes-from).
 - **Database upgrade "Incorrect datetime" error:** If the schema migration fails with a datetime error, you may need to run `TRUNCATE Monitor_Status;` on the database manually, then restart the container. See [this forum thread](https://forums.zoneminder.com/viewtopic.php?t=34263).
 
 ## Upgrading the Event Server from 6.x to 7.x
