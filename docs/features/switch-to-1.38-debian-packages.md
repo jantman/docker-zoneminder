@@ -106,11 +106,11 @@ These are the compile-time decisions the Debian packaging makes differently from
 | `ZM_OPT_FFMPEG` | `no` | `yes` | **Package is correct; ours is a bug.** `ffmpeg` is not installed in our builder stage, so cmake could not find it and seeded the DB with ffmpeg marked absent. A fresh install from our image starts with video encoding disabled. |
 | `ZM_PATH_FFMPEG` | `FFMPEG_EXECUTABLE-NOTFOUND` | `/usr/bin/ffmpeg` | Same root cause as above. |
 | `ZM_PATH_ARP`, `ZM_PATH_ARP_SCAN`, `ZM_PATH_IP`, `ZM_PATH_IFCONFIG` | empty | absolute paths | Package is better; ours relies on ZoneMinder's runtime `PATH` search. |
-| `ZM_DIR_TEMP` / `ZM_PATH_SWAP` / `ZM_DIR_EXPORTS` / `ZM_UPLOAD_LOC_DIR` | `/tmp/zm` | `/var/tmp/zm` | **Package is better here too.** Our `Dockerfile` creates `/tmp/zm` and then deletes it again with `rm -Rf /tmp/*`, and `/tmp` is a tmpfs at runtime -- so `/tmp/zm` does not exist in the release image at all. `/var/tmp/zm` does exist in the package image. |
+| `ZM_DIR_TEMP` / `ZM_PATH_SWAP` / `ZM_DIR_EXPORTS` / `ZM_UPLOAD_LOC_DIR` | `/tmp/zm` | `/var/tmp/zm` | **Cosmetic.** Neither directory exists in its image after build, and it does not matter: `zmpkg.pl`'s `verifyFolder()` recreates the path at every start (`mkdir($folder, 0774)`), and the path is baked into `zmpkg.pl` at build time -- line 188 reads `/tmp/zm` in our build and `/var/tmp/zm` in the package. Both self-heal. |
 | `ZM_DIR_CACHE` | `/var/cache/zoneminder` | `/var/cache/zoneminder/cache` | **Needs a decision.** `content/zm-site.conf` has `Alias /cache "/var/cache/zoneminder"`; under the package that alias should point at `/var/cache/zoneminder/cache`. This is a compiled-in `define` in `www/includes/config.php`, not overridable from `conf.d`. |
 | `ZM_PATH_ZMS` | `/cgi-bin/nph-zms` | `/zm/cgi-bin/nph-zms` | No action. `content/zmcustom.conf` already overrides this to `/cgi-bin/zms`, and `conf.d` wins. |
 | `ZM_PCRE` | `1` | `0` | **Minor regression.** The package is not built against libpcre2. Its only effect is that the "Regexp" HTTP method is removed from the monitor source-type dropdown (`skins/classic/views/monitor.php`). Nothing else in the tree reads `ZM_PCRE`. |
-| `www/api/app/tmp` | absent | symlink to `/var/tmp` | Package is better; CakePHP's temp dir is simply missing in our image today. |
+| `www/api/app/tmp` | absent | symlink to `/var/tmp` | Probably vestigial. ZM's `api/lib/Cake/bootstrap.php` overrides CakePHP's `TMP` constant to the ZM temp dir, so the conventional `app/tmp` location should not be consulted. Not proven either way. |
 | `www/api/app/Config/core.php` | | | Differs only in the randomly generated `Security.salt` / `Security.cipherSeed`. |
 | `zmx10.pl` | absent | present | We build with `-DZM_NO_X10=ON`; the package ships X10 support. Harmless. |
 | Linked libraries | `libcurl.so.4` (OpenSSL), `libpcre2-8`, `libunwind` | `libcurl-gnutls.so.4` | Follows from the above. Both builds `dlopen` `libvlc.so` and `libvncclient.so` identically, so VLC and VNC camera support is unchanged. |
@@ -167,19 +167,73 @@ with the same volumes and tmpfs mounts as `docker-compose.yml`.
 - No `ERR`/`FAT` lines in any file under `/var/log/zm`, and no errors in the container log.
 - The seeded database confirms the ffmpeg fix is real, not theoretical:
   `ZM_OPT_FFMPEG=1`, `ZM_PATH_FFMPEG=/usr/bin/ffmpeg`, `ZM_UPLOAD_LOC_DIR=/var/tmp/zm`.
-  The release image's `zm_create.sql` seeds `ZM_OPT_FFMPEG` with `Value = '0'`.
+  The release image's `zm_create.sql` seeds `ZM_OPT_FFMPEG` with `Value = '0'`. This is
+  the one genuine bug fix in the switch.
 
 The `zoneminder` postinst is well-behaved under Docker: it enabled `cgi` and `rewrite`,
 found no local MariaDB ("MySQL/MariaDB not found; assuming remote server.") and so touched
 no database, and `policy-rc.d` blocked every service start it attempted.
 
+### Suppressing the unwanted dependencies
+
+The systemd/polkit/dbus/rsyslog pull-in is avoidable, and `Dockerfile.debpkg-slim` proves
+it by building and running.
+
+Neither dependency is reachable in this image:
+
+- **polkit.** `zmsystemctl.pl` is the only consumer -- `#!/usr/bin/pkexec /usr/bin/perl` is
+  its shebang. Its only caller is `zmpkg.pl`, which invokes it solely when
+  `ps -o comm= -p 1` reports systemd. PID 1 here is `s6-svscan`, so that branch never runs.
+  Note that this script is *already* unrunnable in the current release image, which has the
+  same shebang and no `pkexec` installed.
+- **syslog.** Nothing logs to it. ZoneMinder logs to `/var/log/zm`; the s6 services log to
+  the container's stdout.
+
+`policykit-1` and `system-log-daemon` are both pure virtual packages with no real provider,
+so a dummy package declaring `Provides: policykit-1, system-log-daemon` satisfies
+`policykit-1 | pkexec` and `rsyslog | system-log-daemon` without shadowing or displacing
+anything real.
+
+**Build the dummy with `dpkg-deb`, not `equivs`.** The equivs route was tried first and
+works, but equivs drags in `autoconf`, `groff-base`, `man-db` and `libmagic1t64` -- about
+9.8 MB of orphans that survive `apt-get purge equivs && apt-get autoremove`. That trades
+systemd for man-db. `dpkg-deb --build` needs nothing that is not already in `debian:13.6`.
+
+Result: `systemd`, `systemd-sysv`, `libsystemd-shared`, `polkitd`, `pkexec`,
+`libpam-systemd`, every `dbus*`, `rsyslog` and its `libestr0`/`libfastjson4`/`liblognorm5`
+are all absent, and `/sbin/init` does not exist.
+
+| Image | Packages | Size |
+|---|---|---|
+| Current release (source) | 748 | 2.593 GB |
+| Package, as-is | 774 | 2.622 GB (+29 MB) |
+| Package, slim | 755 | 2.600 GB (**+7.3 MB**) |
+
+Against the current release image the slim variant gains `zoneminder`,
+`default-mysql-client`, `mariadb-client-compat`, `libjwt2`, `libb64-0d`, `libvncclient1`,
+`liblzo2-2`, `php8.4-phpdbg` and the dummy, and loses `libdigest-sha-perl` and
+`libmodule-load-conditional-perl`. `libb64-0d` and `liblzo2-2` are not bloat -- they are
+required by `libjwt2` and `libvncclient1` respectively, both real ZoneMinder dependencies
+that the source build needs too and currently has nothing providing.
+
+Verified by running it: `docker compose` against MariaDB 11.8 seeds the database, `/` -> 302
+-> the privacy page renders, all five ZM daemons are valid under `zmdc.pl`, and there are no
+`ERR`/`FAT` lines in `/var/log/zm` and no errors in the container log.
+
+Dropping systemd does mean the postinst's `systemd-tmpfiles --create zoneminder.conf` no
+longer runs, so `/var/tmp/zm` is absent from the built slim image. That turns out not to
+matter -- `zmpkg.pl` recreates it at every start, and the running container has it as
+`drwxrwxr-- www-data:www-data`, exactly the 0774 that `verifyFolder()` creates.
+`/var/cache/zoneminder/cache` and `/var/lib/zm` are unaffected either way; they come from
+the `.deb`'s own directory entries, not from tmpfiles.
+
 ### Recommendation
 
-The differences are small and mostly in the package's favour. Two of them are fixes for
-bugs this image ships today (`ZM_OPT_FFMPEG=no`, the missing temp directory). Proceeding
-looks worthwhile, with three items to settle in Milestone 2:
+The differences are small and mostly in the package's favour. **One** of them is a fix for
+a bug this image ships today: `ZM_OPT_FFMPEG=no`. Proceeding looks worthwhile, with two
+items to settle in Milestone 2:
 
 1. Point `Alias /cache` in `content/zm-site.conf` at `/var/cache/zoneminder/cache`.
-2. Decide whether to accept `systemd`/`polkitd`/`rsyslog`, or suppress them with an
-   `equivs` dummy package providing `pkexec` and `system-log-daemon`.
-3. Accept or reject the loss of `ZM_PCRE` (Regexp HTTP source method).
+2. Accept or reject the loss of `ZM_PCRE` (Regexp HTTP source method).
+
+The dependency-creep question is settled -- see "Suppressing the unwanted dependencies".
