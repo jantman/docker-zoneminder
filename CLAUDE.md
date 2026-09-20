@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Docker image for ZoneMinder 1.38.4 (video surveillance) on Debian 13 (Trixie), using Apache + PHP 8.4. ZoneMinder is compiled from source in a multi-stage Docker build. Requires an external MySQL/MariaDB database (not bundled). Includes the ZM Event Notification Server (ZMES) — zmeventnotificationNg 7.0.31 with pyzmNg 2.5.3 — for event-driven object detection via WebSocket on port 9000, and go2rtc for WebRTC/MSE/HLS live streaming. This is a personal WIP project (MIT license).
+Docker image for ZoneMinder 1.38.4 (video surveillance) on Debian 13 (Trixie), using Apache + PHP 8.4. ZoneMinder is installed from the official ZoneMinder Debian packages (`zmrepo.zoneminder.com`); Debian's own `zoneminder` package is 1.36.x and is not usable here. Requires an external MySQL/MariaDB database (not bundled). Includes the ZM Event Notification Server (ZMES) — zmeventnotificationNg 7.0.31 with pyzmNg 2.5.3 — for event-driven object detection via WebSocket on port 9000, and go2rtc for WebRTC/MSE/HLS live streaming. This is a personal WIP project (MIT license).
 
 Both ZMES and `pyzm` are pinned to upstream releases: `ZMES_VERSION=v7.0.31` (a git tag)
 and `PYZM_VERSION=2.5.3` (PyPI). Two upstream fixes this deployment depends on set a
@@ -25,6 +25,32 @@ The fork pins are still reachable only because `jantman/zmeventnotificationNg` a
 `jantman/pyzmNg` carry the annotated tags `image-pin-pr49` and `image-pin-pr67-pr69` on
 those commits. **Do not delete those tags while `1.38.4-jantman1-fork` is a release anyone
 might rebuild.**
+
+ZoneMinder itself comes from the `zmrepo` flat repository
+(`deb https://zmrepo.zoneminder.com/debian/release-1.38 trixie/`), pinned to an exact
+version by `ARG ZM_VERSION`. Four things about that are easy to get wrong:
+
+- **`ZM_VERSION` is the full Debian version string**, `1.38.4+trixie1`, not `1.38.4`. The
+  separator before the vendor suffix changed mid-series (`1.38.2-trixie1`, then
+  `1.38.3+trixie1`), so it cannot be reconstructed from the upstream version.
+- **The package would pull systemd and rsyslog** through `policykit-1 | pkexec` and
+  `rsyslog | system-log-daemon`. Neither is reachable here — `zmsystemctl.pl` is the only
+  polkit consumer and `zmpkg.pl` only calls it when PID 1 is systemd, which it never is —
+  so a dummy `.deb` built with `dpkg-deb` stands in for both. **Do not use `equivs`**: it
+  leaves ~9.8 MB of orphans behind, more than the systemd it saves.
+- **`ZM_DIR_CACHE` is `/var/cache/zoneminder/cache`** under the package, not
+  `/var/cache/zoneminder`. It is a compiled-in `define` in `www/includes/config.php` and
+  cannot be overridden from `conf.d`, so `content/zm-site.conf`'s `Alias /cache` has to
+  track it.
+- **`ZM_PCRE=0`**, because the packages are not built against libpcre2. The sole effect is
+  that the "Regexp" HTTP source method disappears from the monitor dropdown. This is an
+  accepted loss — do not rebuild from source, patch the package, or add libpcre2 to try to
+  win it back; the flag is compiled in.
+
+Two more traps worth knowing: the package's postinst rewrites `/etc/zm` ownership and modes
+to its own preference, so the image's `chown`/`chmod` must come after the install; and
+`zmpkg.pl`'s `verifyFolder()` `mkdir`s `/var/tmp/zm` at every start, so its absence from a
+built image is not a defect and nothing should create it redundantly.
 
 The image is deliberately **CPU-only**: no CUDA, no GPU libraries, no CUDA-enabled OpenCV. It performs no inference; a separate remote gateway does. Keeping GPU libraries out prevents an accidental local-inference fallback from masking a gateway outage. `pyzm` is installed with the `[ml]` extra only — never `[serve]` or `[full]`, which pull ultralytics/fastapi.
 
@@ -59,8 +85,8 @@ There is no automated test suite. Verification is manual: build the image and ru
 
 ### Container Internals
 
-- **Base:** Debian 13.6 (Trixie) with ZoneMinder 1.38.4 compiled from source
-- **Build:** Multi-stage Dockerfile — builder stage compiles ZM with cmake and clones the pinned ES 7 tag, runtime stage contains only what's needed to run
+- **Base:** Debian 13.6 (Trixie) with ZoneMinder 1.38.4 from the `zmrepo` package `1.38.4+trixie1`
+- **Build:** Single-stage Dockerfile — adds the zmrepo apt source (key pinned by fingerprint, scoped with `signed-by`), installs `zoneminder=${ZM_VERSION}`, then layers ZMES, pyzm and go2rtc on top
 - **Event server:** `zmeventnotification.pl` in `/usr/bin`, its `ZmEventNotification::*` Perl modules in `/usr/share/perl5/ZmEventNotification/`, hook scripts and the Pushover plugin in `/var/lib/zmeventnotification/bin/`
 - **Process supervision:** s6 (`s6-svscan`) manages multiple services:
   - `/etc/services.d/apache2/run` - Apache web server
@@ -83,7 +109,7 @@ There is no automated test suite. Verification is manual: build the image and ru
 
 ### File Layout
 
-- `Dockerfile` - Multi-stage image build (builder + runtime)
+- `Dockerfile` - Single-stage image build
 - `entrypoint.sh` - Container startup script
 - `content/` - Files copied into the image during build (Apache config, s6 service scripts, go2rtc)
   - `content/zm-site.conf` - Apache VirtualHost config

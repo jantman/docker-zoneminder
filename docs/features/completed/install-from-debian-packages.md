@@ -259,4 +259,4 @@ created it as `root`, so `entrypoint.sh` now creates any missing cache subdirect
 
 - **Milestone 1: complete.**
 - **Milestone 2: complete.** See "Verification results" above.
-- **Milestone 3: not started.**
+- **Milestone 3: complete.**
